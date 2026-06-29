@@ -1,0 +1,12 @@
+main
+frontend/dist/
+frontend/node_modules/
+.vcpkg/buildtrees/
+.vcpkg/packages/
+.vcpkg/downloads/
+vcpkg_installed/
+*.o
+*.a
+
+.vcpkg
+lib/webview/

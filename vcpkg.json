@@ -1,0 +1,13 @@
+{
+  "name": "dotfiles-mgr",
+  "version": "1.0.0",
+  "dependencies": [
+    "cjson",
+    "libarchive",
+    "libgit2",
+    "sqlite3",
+    "libyaml",
+    "libsodium",
+    "zserge-webview"
+  ]
+}
