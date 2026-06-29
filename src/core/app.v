@@ -37,7 +37,7 @@ pub fn new_app() &App {
 	app.register_rpc('log', fn (req string, mut a App) string {
 		msg := get_arg(req, 0) or { "" }
 		level := get_arg(req, 1) or { "info" }
-		println("[FRONTEND] [$${level.to_upper()}] $${msg}")
+		println("[FRONTEND] [${level.to_upper()}] ${msg}")
 		a.log_to_frontend(msg, level)
 		return "{}"
 	})
@@ -53,20 +53,20 @@ pub fn new_app() &App {
 		for k, _ in a.handlers {
 			handler_names << k
 		}
-		println('[registered_rpcs] $${handler_names}')
+		println('[registered_rpcs] ${handler_names}')
 		
 		// Process info
-		println('[process.cwd] $${os.getwd()}')
-		println('[process.pid] $${C.getpid()}')
+		println('[process.cwd] ${os.getwd()}')
+		println('[process.pid] ${C.getpid()}')
 		
 		// Platform info
-		println('[platform] $${os.user_os()}')
-		println('[home_dir] $${os.home_dir()}')
+		println('[platform] ${os.user_os()}')
+		println('[home_dir] ${os.home_dir()}')
 		
 		// Workspace state
 		if os.is_dir('workspace') {
 			entries := os.ls('workspace') or { []string{} }
-			println('[workspace] $${entries}')
+			println('[workspace] ${entries}')
 		} else {
 			println('[workspace] (not created)')
 		}
@@ -74,7 +74,7 @@ pub fn new_app() &App {
 		// Trash state
 		if os.is_dir('workspace_trash') {
 			entries := os.ls('workspace_trash') or { []string{} }
-			println('[workspace_trash] $${entries}')
+			println('[workspace_trash] ${entries}')
 		} else {
 			println('[workspace_trash] (empty)')
 		}
@@ -160,11 +160,11 @@ fn c_rpc_dispatcher(seq &char, req &char, arg voidptr) {
 	req_str := unsafe { req.vstring() }
 
 	if ctx.name != "log" && ctx.name != "dumpBackendState" {
-		println("[RPC CALL] $${ctx.name} <- $${req_str}")
+		println("[RPC CALL] ${ctx.name} <- ${req_str}")
 	}
 
 	handler := app.handlers[ctx.name] or {
-		println("[RPC ERROR] Handler not found: $${ctx.name}")
+		println("[RPC ERROR] Handler not found: ${ctx.name}")
 		C.webview_return(app.w, seq, 1, '{"error": "Handler not found"}'.str)
 		return
 	}
@@ -173,7 +173,7 @@ fn c_rpc_dispatcher(seq &char, req &char, arg voidptr) {
 	
 	if ctx.name != "log" && ctx.name != "dumpBackendState" {
 		res_short := if res.len > 100 { res[..100] + "..." } else { res }
-		println("[RPC RES]  $${ctx.name} -> $${res_short}")
+		println("[RPC RES]  ${ctx.name} -> ${res_short}")
 	}
 
 	C.webview_return(app.w, seq, 0, res.str)
