@@ -8,5 +8,7 @@ vcpkg_installed/
 *.o
 *.a
 
+vcpkg*
+
 .vcpkg
 lib/webview/

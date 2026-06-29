@@ -2,8 +2,6 @@ import os
 import json
 import x.json2
 
-type WebviewT = voidptr
-
 struct BindingCtx {
 	app &App = unsafe { nil }
 	name string
@@ -11,7 +9,7 @@ struct BindingCtx {
 
 struct App {
 mut:
-	w WebviewT
+	w voidptr
 	handlers map[string]fn(req string, mut app App) string
 	binding_ctxs []&BindingCtx
 }
