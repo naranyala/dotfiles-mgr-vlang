@@ -2,11 +2,11 @@
 set -e
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 
-echo "=== vcpkg: installing dependencies ==="
-"$ROOT/.vcpkg/vcpkg" install --triplet x64-linux --x-manifest-root="$ROOT" --x-install-root="$ROOT/vcpkg_installed"
+# echo "=== vcpkg: installing dependencies ==="
+# "$ROOT/.vcpkg/vcpkg" install --triplet x64-linux --x-manifest-root="$ROOT" --x-install-root="$ROOT/vcpkg_installed"
 
-echo "=== webview: building static library ==="
-make -C "$ROOT/lib/webview"
+# echo "=== webview: building static library ==="
+# make -C "$ROOT/lib/webview"
 
 echo "=== frontend: building bundle ==="
 (cd "$ROOT/frontend" && bun run build.js)

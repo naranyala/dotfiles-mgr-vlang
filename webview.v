@@ -6,12 +6,12 @@ module main
 #flag -l webview
 #flag -l stdc++
 
+
 // vcpkg headers/libs (used by other deps)
 #flag -I @VMODROOT/vcpkg_installed/x64-linux/include
 #flag -L @VMODROOT/vcpkg_installed/x64-linux/lib
 
 $if linux {
-	#pkgconfig webkit2gtk-4.1
 	#flag linux -l dl
 	#flag linux -l pthread
 }
@@ -19,7 +19,7 @@ $if macos {
 	#flag -framework WebKit
 }
 
-#include "webview/api.h"
+#include "webview/webview.h"
 
 pub const (
 	hint_none  = 0
