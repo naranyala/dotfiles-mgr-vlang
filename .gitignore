@@ -1,14 +1,8 @@
 main
 frontend/dist/
 frontend/node_modules/
-.vcpkg/buildtrees/
-.vcpkg/packages/
-.vcpkg/downloads/
+.vcpkg/
 vcpkg_installed/
 *.o
 *.a
-
-vcpkg*
-
-.vcpkg
-lib/webview/
+/tmp/

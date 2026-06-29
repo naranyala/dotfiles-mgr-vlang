@@ -2,7 +2,7 @@ import * as esbuild from 'esbuild';
 import { readFileSync, writeFileSync } from 'fs';
 
 const result = await esbuild.build({
-  entryPoints: ['src/index.js'],
+  entryPoints: ['src/app.js'],
   bundle: true,
   write: false,
   minify: true,

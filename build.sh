@@ -1,19 +1,29 @@
 #!/bin/bash
 set -e
-ROOT="$(cd "$(dirname "$0")" && pwd)"
+DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$DIR"
 
-# echo "=== vcpkg: installing dependencies ==="
-# "$ROOT/.vcpkg/vcpkg" install --triplet x64-linux --x-manifest-root="$ROOT" --x-install-root="$ROOT/vcpkg_installed"
+echo "=== Building webview static library ==="
+g++ -c -fPIC -I lib/webview/include \
+    $(pkg-config --cflags webkit2gtk-4.1) \
+    -o /tmp/webview.o -x c++ - << 'EOF'
+#define WEBVIEW_STATIC
+#define WEBVIEW_IMPLEMENTATION
+#define WEBVIEW_GTK
+#include <webview/webview.h>
+EOF
+ar rcs lib/webview/libwebview_new.a /tmp/webview.o
+echo "  -> lib/webview/libwebview_new.a"
 
-# echo "=== webview: building static library ==="
-# make -C "$ROOT/lib/webview"
+echo "=== Building frontend ==="
+if [ -f frontend/package.json ]; then
+    cd frontend
+    bun install 2>/dev/null || npm install 2>/dev/null || true
+    node build.js 2>/dev/null || true
+    cd "$DIR"
+fi
 
-echo "=== frontend: building bundle ==="
-(cd "$ROOT/frontend" && bun run build.js)
+echo "=== Building V application ==="
+v -cc gcc -o main .
 
-echo "=== V: compiling application ==="
-v -cc gcc \
-  -cflags "$(pkg-config --cflags gtk+-3.0 webkit2gtk-4.1)" \
-  -o "$ROOT/main" "$ROOT/."
-
-echo "=== done ==="
+echo "=== Done: ./main ==="

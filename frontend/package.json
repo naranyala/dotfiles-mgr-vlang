@@ -3,6 +3,10 @@
   "type": "module",
   "private": true,
   "devDependencies": {
-    "esbuild": "^0.28.1"
+    "esbuild": "^0.28.1",
+    "bun": "^1.2.0"
+  },
+  "scripts": {
+    "test": "bun test"
   }
 }
