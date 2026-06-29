@@ -6,3 +6,5 @@ vcpkg_installed/
 *.o
 *.a
 /tmp/
+
+**/node_modules
