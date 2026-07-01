@@ -1,358 +1,280 @@
 import './core/rpc.js'
-import { reactive } from './core/signals.js'
+import { signal } from './core/signals.js'
 import { ReactiveComponent } from './core/component.js'
-
-import * as system from './plugins/system/index.js'
-import * as git from './plugins/git/index.js'
-import * as files from './plugins/files/index.js'
-import * as tools from './plugins/tools/index.js'
 import { Terminal } from './components/terminal.js'
 
-Terminal.define()
+import { plugins, initAll } from './shell/plugins.js'
+import { installStateDump } from './shell/state.js'
+import { launchers, fuzzyMatch } from './shell/launchers.js'
+import { styles } from './shell/styles.js'
+import {
+	renderTabBar, renderTabContent, renderStatusBar,
+	renderOverlay, renderBottomDrawer, renderSidePanel,
+} from './shell/templates.js'
 
-const plugins = [system, git, files, tools]
-
-function mergeStates() {
-	const merged = {}
-	for (const p of plugins) {
-		for (const [k, v] of Object.entries(p.state)) {
-			merged[k] = v
-		}
-	}
-	return merged
+window.onerror = (msg, src, line, col, err) => {
+	console.error('[Global]', msg, err?.stack || `${src}:${line}:${col}`)
 }
-
-const state = reactive(mergeStates())
-
-// --- State Exposure: dump all frontend + backend states to CLI terminal ---
-
-function collectPluginStates() {
-	const snapshot = {}
-	for (const p of plugins) {
-		const name = p === system ? 'system' : p === git ? 'git' : p === files ? 'files' : p === tools ? 'tools' : 'unknown'
-		const raw = {}
-		for (const key of Object.keys(p.state)) {
-			try { raw[key] = JSON.parse(JSON.stringify(p.state[key])) } catch { raw[key] = String(p.state[key]) }
-		}
-		snapshot[name] = raw
-	}
-	return snapshot
-}
-
-window.dumpAllState = async function () {
-	const frontendStates = collectPluginStates()
-	const divider = '═'.repeat(60)
-
-	// Frontend states
-	if (window.rpc && window.rpc.log) {
-		window.rpc.log(`\n${divider}\n  FRONTEND STATE DUMP\n${divider}`, 'info')
-		for (const [plugin, st] of Object.entries(frontendStates)) {
-			window.rpc.log(`[plugin:${plugin}] ${JSON.stringify(st, null, 2)}`, 'info')
-		}
-	}
-
-	// Backend state
-	if (window.rpc && window.rpc.dumpBackendState) {
-		try {
-			const backendState = await window.rpc.dumpBackendState()
-			if (window.rpc.log) {
-				window.rpc.log(`[BACKEND STATE JSON] ${JSON.stringify(backendState, null, 2)}`, 'info')
-			}
-		} catch (e) {
-			console.error('Failed to dump backend state', e)
-		}
-	}
-
-	if (window.rpc && window.rpc.log) {
-		window.rpc.log(`${divider}\n  END STATE DUMP\n${divider}\n`, 'info')
-	}
-}
-
-// Dump state on startup (after init) and on Ctrl+Shift+D
-document.addEventListener('keydown', (e) => {
-	if (e.ctrlKey && e.shiftKey && e.key === 'D') {
-		e.preventDefault()
-		window.dumpAllState()
-	}
+window.addEventListener('unhandledrejection', (e) => {
+	console.error('[Global] Unhandled rejection:', e.reason)
+	e.preventDefault()
 })
 
-async function initAll() {
-	await Promise.all(plugins.map(p => p.init()))
-	// Dump all states once after initialization
-	setTimeout(() => window.dumpAllState(), 500)
-}
+installStateDump()
 
 class SystemDashboard extends ReactiveComponent {
+	constructor() {
+		super()
+		this.searchQuery = signal('')
+		this.tabs = signal([{ id: 'home', title: 'Home', icon: '⊞', canClose: false }])
+		this.activeTab = signal('home')
+		this.bottomDrawerOpen = signal(false)
+		this.bottomDrawerTab = signal('quick')
+		this.sidePanelOpen = signal(false)
+		this.sidePanelTab = signal('info')
+	}
+
+	openTab(card) {
+		const tabs = [...this.tabs.value]
+		if (!tabs.find(t => t.id === card.id)) {
+			tabs.push({ id: card.id, title: card.title, icon: card.icon, canClose: true, content: card.content })
+			this.tabs.value = tabs
+		}
+		this.activeTab.value = card.id
+	}
+
+	closeTab(tabId) {
+		if (tabId === 'home') return
+		const tabs = this.tabs.value.filter(t => t.id !== tabId)
+		this.tabs.value = tabs
+		if (this.activeTab.value === tabId) {
+			this.activeTab.value = tabs.length > 0 ? tabs[tabs.length - 1].id : 'home'
+		}
+	}
+
+	closeAllTabs() {
+		this.tabs.value = [{ id: 'home', title: 'Home', icon: '⊞', canClose: false }]
+		this.activeTab.value = 'home'
+	}
+
+	_initDrawerDrag() {
+		const root = this.shadowRoot
+		if (!root) return
+		const handle = root.querySelector('.drawer-handle')
+		const drawer = root.querySelector('.bottom-drawer')
+		if (!handle || !drawer) return
+
+		let startY = 0
+		let startTranslate = 0
+		const getMaxY = () => {
+			const rect = drawer.getBoundingClientRect()
+			return window.innerHeight - 32 - rect.height
+		}
+
+		const onStart = (e) => {
+			e.preventDefault()
+			const touch = e.touches ? e.touches[0] : e
+			startY = touch.clientY
+			const style = window.getComputedStyle(drawer)
+			const matrix = new DOMMatrixReadOnly(style.transform)
+			startTranslate = matrix.m42
+			drawer.classList.add('dragging')
+			document.addEventListener('mousemove', onMove)
+			document.addEventListener('mouseup', onEnd)
+			document.addEventListener('touchmove', onMove, { passive: false })
+			document.addEventListener('touchend', onEnd)
+		}
+
+		const onMove = (e) => {
+			e.preventDefault()
+			const touch = e.touches ? e.touches[0] : e
+			const dy = touch.clientY - startY
+			const maxTranslate = 0
+			const minTranslate = getMaxY() + 40
+			const newY = Math.max(minTranslate, Math.min(maxTranslate, startTranslate + dy))
+			drawer.style.transform = `translateY(${newY}px)`
+		}
+
+		const onEnd = () => {
+			drawer.classList.remove('dragging')
+			document.removeEventListener('mousemove', onMove)
+			document.removeEventListener('mouseup', onEnd)
+			document.removeEventListener('touchmove', onMove)
+			document.removeEventListener('touchend', onEnd)
+			const style = window.getComputedStyle(drawer)
+			const matrix = new DOMMatrixReadOnly(style.transform)
+			const currentY = matrix.m42
+			const threshold = getMaxY() * 0.4
+			if (currentY > threshold) {
+				this.bottomDrawerOpen.value = false
+			} else {
+				this.bottomDrawerOpen.value = true
+			}
+			drawer.style.transform = ''
+		}
+
+		handle.addEventListener('mousedown', onStart)
+		handle.addEventListener('touchstart', onStart, { passive: false })
+	}
+
+	_initSidePanelDrag() {
+		const root = this.shadowRoot
+		if (!root) return
+		const panel = root.querySelector('.side-panel')
+		const header = root.querySelector('.side-header')
+		if (!panel || !header) return
+
+		let startX = 0
+		let startTranslate = 0
+		const panelWidth = () => panel.getBoundingClientRect().width
+
+		const onStart = (e) => {
+			if (e.target.closest('button')) return
+			e.preventDefault()
+			const touch = e.touches ? e.touches[0] : e
+			startX = touch.clientX
+			const style = window.getComputedStyle(panel)
+			const matrix = new DOMMatrixReadOnly(style.transform)
+			startTranslate = matrix.m41
+			panel.classList.add('dragging')
+			document.addEventListener('mousemove', onMove)
+			document.addEventListener('mouseup', onEnd)
+			document.addEventListener('touchmove', onMove, { passive: false })
+			document.addEventListener('touchend', onEnd)
+		}
+
+		const onMove = (e) => {
+			e.preventDefault()
+			const touch = e.touches ? e.touches[0] : e
+			const dx = touch.clientX - startX
+			const maxTranslate = 0
+			const minTranslate = -panelWidth()
+			const newX = Math.max(minTranslate, Math.min(maxTranslate, startTranslate + dx))
+			panel.style.transform = `translateX(${newX}px)`
+		}
+
+		const onEnd = () => {
+			panel.classList.remove('dragging')
+			document.removeEventListener('mousemove', onMove)
+			document.removeEventListener('mouseup', onEnd)
+			document.removeEventListener('touchmove', onMove)
+			document.removeEventListener('touchend', onEnd)
+			const style = window.getComputedStyle(panel)
+			const matrix = new DOMMatrixReadOnly(style.transform)
+			const currentX = matrix.m41
+			const threshold = -panelWidth() * 0.4
+			if (currentX < threshold) {
+				this.sidePanelOpen.value = false
+			} else {
+				this.sidePanelOpen.value = true
+			}
+			panel.style.transform = ''
+		}
+
+		header.addEventListener('mousedown', onStart)
+		header.addEventListener('touchstart', onStart, { passive: false })
+	}
+
 	onMount() {
 		initAll()
 		for (const p of plugins) {
 			if (p.onMount) p.onMount(this)
 		}
-		this.terminal = this.query('terminal-view')
-		if (this.terminal) {
-			window.addEventListener('backend-log', (e) => {
-				this.terminal.addLog(e.detail.msg, e.detail.level)
-			})
-		}
+		this.delegate('input', '#card-search', (e) => {
+			this.searchQuery.value = e.target.value
+		})
+		this.delegate('click', '#btn-search-clear', () => {
+			this.searchQuery.value = ''
+			const input = this.shadowRoot && this.shadowRoot.querySelector('#card-search')
+			if (input) input.value = ''
+		})
+		this.delegate('click', '[data-open-tab]', (e) => {
+			const el = e.target.closest('[data-open-tab]')
+			if (!el) return
+			const card = launchers.find(c => c.id === el.dataset.openTab)
+			if (card) this.openTab(card)
+		})
+		this.delegate('click', '[data-tab]', (e) => {
+			const el = e.target.closest('[data-tab]')
+			if (!el) return
+			this.activeTab.value = el.dataset.tab
+		})
+		this.delegate('click', '[data-close-tab]', (e) => {
+			const el = e.target.closest('[data-close-tab]')
+			if (!el) return
+			this.closeTab(el.dataset.closeTab)
+		})
+		this.delegate('click', '[data-close-all]', () => {
+			this.closeAllTabs()
+		})
+		this.delegate('click', '#btn-bottom-drawer', () => {
+			this.bottomDrawerOpen.value = !this.bottomDrawerOpen.value
+		})
+		this.delegate('click', '[data-bottom-tab]', (e) => {
+			const el = e.target.closest('[data-bottom-tab]')
+			if (!el) return
+			this.bottomDrawerTab.value = el.dataset.bottomTab
+			this.bottomDrawerOpen.value = true
+		})
+		this.delegate('click', '#btn-close-bottom-drawer', () => {
+			this.bottomDrawerOpen.value = false
+		})
+		this.delegate('click', '#btn-side-panel', () => {
+			this.sidePanelOpen.value = !this.sidePanelOpen.value
+		})
+		this.delegate('click', '[data-side-tab]', (e) => {
+			const el = e.target.closest('[data-side-tab]')
+			if (!el) return
+			this.sidePanelTab.value = el.dataset.sideTab
+			this.sidePanelOpen.value = true
+		})
+		this.delegate('click', '#btn-close-side-panel', () => {
+			this.sidePanelOpen.value = false
+		})
+		this.delegate('click', '.drawer-overlay', (e) => {
+			if (e.target.classList.contains('drawer-overlay')) {
+				this.bottomDrawerOpen.value = false
+				this.sidePanelOpen.value = false
+			}
+		})
+
+		this._initDrawerDrag()
+		this._initSidePanelDrag()
+
+		window.addEventListener('backend-log', (e) => {
+			const term = this.shadowRoot && this.shadowRoot.querySelector('terminal-view')
+			if (term) term.addLog(e.detail.msg, e.detail.level)
+		})
 	}
 
 	render() {
+		const q = this.searchQuery.value
+		const tabs = this.tabs.value
+		const active = this.activeTab.value
+		const bottomOpen = this.bottomDrawerOpen.value
+		const bottomTab = this.bottomDrawerTab.value
+		const sideOpen = this.sidePanelOpen.value
+		const sideTab = this.sidePanelTab.value
+
+		const visible = q
+			? launchers.filter(c => fuzzyMatch(c.title + ' ' + c.desc, q))
+			: launchers
+
+		requestAnimationFrame(() => {
+			this._initDrawerDrag()
+			this._initSidePanelDrag()
+		})
+
 		return `
-      <style>
-        :host {
-          display: block;
-          width: 100%;
-          max-width: 1000px;
-          margin: 40px auto;
-          font-family: 'Inter', system-ui, sans-serif;
-          color: #f8fafc;
-        }
-        .card {
-          background: rgba(30, 41, 59, 0.4);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          border-radius: 16px;
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
-          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-          overflow: hidden;
-          transition: transform 0.2s ease, box-shadow 0.2s ease;
-          display: flex;
-          flex-direction: column;
-        }
-        .card:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-        }
-        .hdr {
-          background: rgba(15, 23, 42, 0.6);
-          color: #f1f5f9;
-          padding: 16px 20px;
-          font-size: 1.05rem;
-          font-weight: 600;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-        }
-        .bd {
-          padding: 20px;
-          font-size: 0.95rem;
-          color: #cbd5e1;
-          flex-grow: 1;
-        }
-        .mono {
-          background: rgba(0, 0, 0, 0.3);
-          color: #34d399;
-          padding: 12px 16px;
-          border-radius: 8px;
-          font-family: ui-monospace, 'Fira Code', monospace;
-          font-size: 0.85rem;
-          white-space: pre-wrap;
-          word-break: break-all;
-          border: 1px solid rgba(255,255,255,0.02);
-        }
-        label {
-          font-weight: 500;
-          font-size: 0.85rem;
-          display: block;
-          margin-bottom: 8px;
-          color: #94a3b8;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-        }
-        input, textarea {
-          width: 100%;
-          padding: 12px 14px;
-          margin-bottom: 16px;
-          background: rgba(15, 23, 42, 0.5);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 8px;
-          box-sizing: border-box;
-          color: #f8fafc;
-          font-family: inherit;
-          font-size: 0.95rem;
-          transition: all 0.2s ease;
-        }
-        input:focus, textarea:focus {
-          outline: none;
-          border-color: #6366f1;
-          background: rgba(15, 23, 42, 0.8);
-          box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
-        }
-        textarea { height: 100px; resize: vertical; }
-        button {
-          background: linear-gradient(135deg, #4f46e5, #7c3aed);
-          color: #fff;
-          border: none;
-          padding: 10px 20px;
-          margin: 4px 8px 0 0;
-          border-radius: 8px;
-          cursor: pointer;
-          font-weight: 600;
-          font-size: 0.95rem;
-          transition: all 0.2s ease;
-          box-shadow: 0 4px 6px -1px rgba(124, 58, 237, 0.3);
-        }
-        button:hover {
-          background: linear-gradient(135deg, #4338ca, #6d28d9);
-          transform: translateY(-1px);
-          box-shadow: 0 6px 8px -1px rgba(124, 58, 237, 0.4);
-        }
-        button:active {
-          transform: translateY(1px);
-          box-shadow: 0 2px 4px -1px rgba(124, 58, 237, 0.3);
-        }
-        button:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-          transform: none;
-        }
-        .badge {
-          display: inline-block;
-          background: rgba(99, 102, 241, 0.15);
-          color: #818cf8;
-          border: 1px solid rgba(99, 102, 241, 0.3);
-          padding: 6px 12px;
-          border-radius: 6px;
-          font-size: 0.85rem;
-          margin: 4px;
-          font-weight: 500;
-        }
-        .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; margin-bottom: 24px; }
-        .ok { color: #34d399; font-weight: 600; }
-        .err { color: #f87171; background: rgba(248, 113, 113, 0.1); padding: 8px 12px; border-radius: 6px; display: inline-block; font-family: monospace; }
-        .full-width { margin-bottom: 24px; }
-        .feature-card {
-           background: linear-gradient(145deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.9));
-           border: 1px solid rgba(16, 185, 129, 0.3);
-           box-shadow: 0 10px 25px -5px rgba(16, 185, 129, 0.15);
-        }
-        .feature-card .hdr {
-           background: rgba(16, 185, 129, 0.08);
-           border-bottom: 1px solid rgba(16, 185, 129, 0.2);
-           color: #6ee7b7;
-        }
-        .clone-input-row {
-          display: flex;
-          gap: 12px;
-          align-items: stretch;
-        }
-        .clone-input-row input {
-          flex: 1;
-          margin-bottom: 0;
-        }
-        .clone-input-row button {
-          margin: 0;
-          white-space: nowrap;
-          background: linear-gradient(135deg, #10b981, #059669);
-          box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.3);
-        }
-        .clone-input-row button:hover {
-          background: linear-gradient(135deg, #059669, #047857);
-          box-shadow: 0 6px 8px -1px rgba(16, 185, 129, 0.4);
-        }
-        .repo-list {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-          margin-top: 12px;
-        }
-        .repo-item {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          background: rgba(16, 185, 129, 0.1);
-          border: 1px solid rgba(16, 185, 129, 0.25);
-          border-radius: 8px;
-          padding: 8px 12px;
-          font-size: 0.9rem;
-        }
-        .repo-item .repo-name {
-          color: #6ee7b7;
-          font-weight: 500;
-        }
-        .btn-remove {
-          background: rgba(248, 113, 113, 0.2);
-          color: #f87171;
-          border: 1px solid rgba(248, 113, 113, 0.3);
-          padding: 4px 10px;
-          font-size: 0.8rem;
-          border-radius: 6px;
-          cursor: pointer;
-          margin: 0;
-          box-shadow: none;
-        }
-        .btn-remove:hover {
-          background: rgba(248, 113, 113, 0.4);
-          transform: none;
-          box-shadow: none;
-        }
-        .btn-restore {
-          background: rgba(99, 102, 241, 0.2);
-          color: #818cf8;
-          border: 1px solid rgba(99, 102, 241, 0.3);
-          padding: 4px 10px;
-          font-size: 0.8rem;
-          border-radius: 6px;
-          cursor: pointer;
-          margin: 0;
-          box-shadow: none;
-        }
-        .btn-restore:hover {
-          background: rgba(99, 102, 241, 0.4);
-          transform: none;
-          box-shadow: none;
-        }
-        .btn-icon {
-          background: none;
-          border: 1px solid rgba(255, 255, 255, 0.15);
-          color: #94a3b8;
-          padding: 6px 10px;
-          font-size: 0.85rem;
-          border-radius: 6px;
-          cursor: pointer;
-          margin: 0;
-          box-shadow: none;
-        }
-        .btn-icon:hover {
-          border-color: rgba(255, 255, 255, 0.3);
-          color: #f1f5f9;
-          transform: none;
-          box-shadow: none;
-        }
-        .git-status {
-          margin-top: 12px;
-          padding: 10px 14px;
-          border-radius: 8px;
-          font-size: 0.9rem;
-        }
-        .git-status.ok {
-          background: rgba(52, 211, 153, 0.1);
-          border: 1px solid rgba(52, 211, 153, 0.25);
-        }
-        .git-status.err {
-          background: rgba(248, 113, 113, 0.1);
-          border: 1px solid rgba(248, 113, 113, 0.25);
-        }
-        .empty-state {
-          color: #64748b;
-          font-style: italic;
-          padding: 12px 0;
-          font-size: 0.9rem;
-        }
-      </style>
-
-      ${git.render()}
-
-       <div class="grid2">
-         ${system.render()}
-         ${tools.render()}
-         ${files.render()}
-       </div>
-       <div class="full-width">
-         <label>Terminal Logs</label>
-         <terminal-view></terminal-view>
-       </div>`
+      <style>${styles}</style>
+      <div class="shell-wrap">
+        ${renderTabBar(tabs, active)}
+        ${renderTabContent(tabs, active, q, visible)}
+      </div>
+      ${renderStatusBar(bottomOpen, bottomTab, sideOpen, sideTab)}
+      ${renderOverlay(bottomOpen, sideOpen)}
+      ${renderBottomDrawer(bottomOpen, bottomTab)}
+      ${renderSidePanel(sideOpen, sideTab, tabs, active, bottomOpen, q)}`
 	}
 }
 

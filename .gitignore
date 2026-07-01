@@ -1,3 +1,6 @@
+
+
+
 main
 frontend/dist/
 frontend/node_modules/
@@ -8,5 +11,6 @@ vcpkg_installed/
 /tmp/
 lib/webview/
 lib/webview.zip
+lib/sqlite/
 
 **/node_modules

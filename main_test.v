@@ -3,37 +3,47 @@ module main
 import os
 import json
 import x.json2
+import src.core
+import src.plugins.system
+import src.plugins.files
+import src.plugins.git
+import src.plugins.tools
+import src.plugins.processes
+import src.plugins.probe
 
-fn empty_app() App {
-	return App{ w: voidptr(0) }
+fn empty_app() core.App {
+	mut app := core.App{ w: voidptr(0) }
+	mut app_ref := &app
+	system.register(mut app_ref)
+	files.register(mut app_ref)
+	git.register(mut app_ref)
+	tools.register(mut app_ref)
+	processes.register(mut app_ref)
+	probe.register(mut app_ref)
+	return app
 }
 
-fn json_str(s string) ?json2.Any {
-	return json2.decode[json2.Any](s)
+fn rpc(mut app core.App, name string, req string) string {
+	handler := app.handlers[name] or { return '{"error": "Handler not found: $name"}' }
+	return handler(req, mut app)
 }
 
-fn test_get_arg() {
-	val := get_arg('["hello","world"]', 0) or { 'NONE' }
-	assert val == 'hello'
-
-	val2 := get_arg('["a","b","c"]', 1) or { 'NONE' }
-	assert val2 == 'b'
-
-	val3 := get_arg('["a"]', 5) or { 'NONE' }
-	assert val3 == 'NONE'
-
-	val4 := get_arg('[]', 0) or { 'NONE' }
-	assert val4 == 'NONE'
-
-	val5 := get_arg('not-json', 0) or { 'NONE' }
-	assert val5 == 'NONE'
+fn jmap(s string) map[string]json2.Any {
+	obj := json2.decode[json2.Any](s) or { panic('bad json: $s') }
+	return obj.as_map()
 }
+
+fn jlen(s string, key string) int {
+	m := jmap(s)
+	return m[key].arr().len
+}
+
+// --- System plugin tests ---
 
 fn test_system_info() {
-	app := empty_app()
-	res := app.rpc_system_info('[]')
-	obj := json_str(res) or { panic('bad json: $res') }
-	m := obj.as_map()
+	mut app := empty_app()
+	res := rpc(mut app, 'systemInfo', '[]')
+	m := jmap(res)
 	assert 'platform' in m
 	assert 'homeDir' in m
 	assert m['platform'].str() != ''
@@ -41,28 +51,25 @@ fn test_system_info() {
 }
 
 fn test_hostname() {
-	app := empty_app()
-	res := app.rpc_hostname('[]')
-	obj := json_str(res) or { panic('bad json: $res') }
-	m := obj.as_map()
+	mut app := empty_app()
+	res := rpc(mut app, 'hostname', '[]')
+	m := jmap(res)
 	assert 'hostname' in m
 	assert m['hostname'].str().len > 0
 }
 
 fn test_username() {
-	app := empty_app()
-	res := app.rpc_username('[]')
-	obj := json_str(res) or { panic('bad json: $res') }
-	m := obj.as_map()
+	mut app := empty_app()
+	res := rpc(mut app, 'username', '[]')
+	m := jmap(res)
 	assert 'username' in m
 	assert m['username'].str().len > 0
 }
 
 fn test_uname() {
-	app := empty_app()
-	res := app.rpc_uname('[]')
-	obj := json_str(res) or { panic('bad json: $res') }
-	m := obj.as_map()
+	mut app := empty_app()
+	res := rpc(mut app, 'uname', '[]')
+	m := jmap(res)
 	assert 'sysname' in m
 	assert 'release' in m
 	assert 'machine' in m
@@ -70,419 +77,563 @@ fn test_uname() {
 }
 
 fn test_memory_info() {
-	app := empty_app()
-	res := app.rpc_memory_info('[]')
-	obj := json_str(res) or { panic('bad json: $res') }
-	m := obj.as_map()
+	mut app := empty_app()
+	res := rpc(mut app, 'memoryInfo', '[]')
+	m := jmap(res)
 	assert 'total' in m
 	assert 'available' in m
 	assert 'usedPercent' in m
 }
 
 fn test_uptime() {
-	app := empty_app()
-	res := app.rpc_uptime('[]')
-	obj := json_str(res) or { panic('bad json: $res') }
-	m := obj.as_map()
+	mut app := empty_app()
+	res := rpc(mut app, 'uptime', '[]')
+	m := jmap(res)
 	assert 'seconds' in m
 	assert m['seconds'].f64() > 0
 }
 
 fn test_disk_usage() {
-	app := empty_app()
-	res := app.rpc_disk_usage('[]')
-	obj := json_str(res) or { panic('bad json: $res') }
-	m := obj.as_map()
+	mut app := empty_app()
+	res := rpc(mut app, 'diskUsage', '[]')
+	m := jmap(res)
 	assert 'total' in m
 	assert 'free' in m
 	assert 'usedPercent' in m
 
-	res2 := app.rpc_disk_usage('["/tmp"]')
-	m2 := json_str(res2) or { panic('bad json: $res2') }.as_map()
+	res2 := rpc(mut app, 'diskUsage', '["/tmp"]')
+	m2 := jmap(res2)
 	assert m2['total'].f64() > 0
 }
 
-fn test_list_dir() {
-	app := empty_app()
-	res := app.rpc_list_dir('["/tmp"]')
-	obj := json_str(res) or { panic('bad json: $res') }
-	assert 'entries' in obj.as_map()
+fn test_disk_usage_invalid_path() {
+	mut app := empty_app()
+	res := rpc(mut app, 'diskUsage', '["/nonexistent_xyzzy"]')
+	m := jmap(res)
+	assert 'error' in m
+}
 
-	res2 := app.rpc_list_dir('[]')
+fn test_memory_info_values() {
+	mut app := empty_app()
+	res := rpc(mut app, 'memoryInfo', '[]')
+	m := jmap(res)
+	total := m['total'].f64()
+	available := m['available'].f64()
+	used_percent := m['usedPercent'].f64()
+	assert total > 0
+	assert available >= 0
+	assert used_percent >= 0
+	assert used_percent <= 100
+}
+
+fn test_uptime_positive() {
+	mut app := empty_app()
+	res := rpc(mut app, 'uptime', '[]')
+	m := jmap(res)
+	seconds := m['seconds'].f64()
+	assert seconds >= 0
+}
+
+fn test_uname_short_output() {
+	mut app := empty_app()
+	res := rpc(mut app, 'uname', '[]')
+	m := jmap(res)
+	assert m['sysname'].str() != ''
+}
+
+// --- Files plugin tests ---
+
+fn test_list_dir() {
+	mut app := empty_app()
+	res := rpc(mut app, 'listDir', '["/tmp"]')
+	obj := jmap(res)
+	assert 'entries' in obj
+
+	res2 := rpc(mut app, 'listDir', '[]')
 	assert res2.contains('error')
 
-	res3 := app.rpc_list_dir('["/nonexistent_path_xyzzy"]')
+	res3 := rpc(mut app, 'listDir', '["/nonexistent_path_xyzzy"]')
 	assert res3.contains('error')
 }
 
+fn test_list_dir_with_entries() {
+	mut app := empty_app()
+	res := rpc(mut app, 'listDir', '["/tmp"]')
+	entries := jmap(res)['entries'].arr()
+	assert entries.len > 0
+}
+
+fn test_list_dir_home() {
+	mut app := empty_app()
+	home := os.home_dir()
+	res := rpc(mut app, 'listDir', '["$home"]')
+	entries := jmap(res)['entries'].arr()
+	assert entries.len > 0
+}
+
 fn test_read_file() {
-	app := empty_app()
-	res := app.rpc_read_file('["/nonexistent_file_xyzzy"]')
+	mut app := empty_app()
+	res := rpc(mut app, 'readFile', '["/nonexistent_file_xyzzy"]')
 	assert res.contains('error')
 
-	res2 := app.rpc_read_file('[]')
+	res2 := rpc(mut app, 'readFile', '[]')
 	assert res2.contains('error')
 }
 
 fn test_write_file() {
-	app := empty_app()
-	tmp := os.join_path(os.temp_dir(), 'v_test_${os.pid()}_write.txt')
+	mut app := empty_app()
+	tmp := os.join_path(os.temp_dir(), 'v_test_write.txt')
 	os.rm(tmp) or {}
 
-	res := app.rpc_write_file(json.encode([tmp, 'hello test']))
+	res := rpc(mut app, 'writeFile', json.encode([tmp, 'hello test']))
 	assert res.contains('success')
 
 	content := os.read_file(tmp) or { panic('file not created') }
 	assert content == 'hello test'
 	os.rm(tmp) or {}
 
-	res2 := app.rpc_write_file('[]')
+	res2 := rpc(mut app, 'writeFile', '[]')
 	assert res2.contains('error')
 
-	res3 := app.rpc_write_file('["/tmp/x"]')
+	res3 := rpc(mut app, 'writeFile', '["/tmp/x"]')
 	assert res3.contains('error')
 }
 
+fn test_write_read_roundtrip() {
+	mut app := empty_app()
+	tmp := os.join_path(os.temp_dir(), 'v_test_roundtrip.txt')
+	content := 'hello roundtrip'
+	defer { os.rm(tmp) or {} }
+
+	res := rpc(mut app, 'writeFile', json.encode([tmp, content]))
+	assert res.contains('success')
+
+	res2 := rpc(mut app, 'readFile', json.encode([tmp]))
+	assert jmap(res2)['content'].str() == content
+}
+
+fn test_write_read_large_file() {
+	mut app := empty_app()
+	tmp := os.join_path(os.temp_dir(), 'v_test_large.txt')
+	content := 'x'.repeat(10000)
+	defer { os.rm(tmp) or {} }
+
+	res := rpc(mut app, 'writeFile', json.encode([tmp, content]))
+	assert res.contains('success')
+
+	res2 := rpc(mut app, 'readFile', json.encode([tmp]))
+	assert jmap(res2)['content'].str().len == 10000
+}
+
 fn test_stat() {
-	app := empty_app()
-	res := app.rpc_stat('["/tmp"]')
-	obj := json_str(res) or { panic('bad json: $res') }
-	m := obj.as_map()
+	mut app := empty_app()
+	res := rpc(mut app, 'stat', '["/tmp"]')
+	m := jmap(res)
 	assert 'size' in m
 	assert 'isDir' in m
 	assert 'isLink' in m
 	assert 'mode' in m
 
-	res2 := app.rpc_stat('[]')
+	res2 := rpc(mut app, 'stat', '[]')
 	assert res2.contains('error')
-}
-
-fn test_glob() {
-	app := empty_app()
-	res := app.rpc_glob('["/tmp/*"]')
-	obj := json_str(res) or { panic('bad json: $res') }
-	assert 'matches' in obj.as_map()
-
-	res2 := app.rpc_glob('["/nonexistent_xyzzy/*"]')
-	obj2 := json_str(res2) or { panic('bad json: $res2') }
-	assert obj2.as_map()['matches'].arr().len == 0
-
-	res3 := app.rpc_glob('[]')
-	assert res3.contains('error')
-}
-
-fn test_env() {
-	app := empty_app()
-	res := app.rpc_env('["HOME"]')
-	obj := json_str(res) or { panic('bad json: $res') }
-	assert obj.as_map()['value'].str() != ''
-
-	res2 := app.rpc_env('[]')
-	assert res2.contains('error')
-
-	res3 := app.rpc_env('["__NONEXISTENT_VAR_12345__"]')
-	assert res3.contains('error')
-}
-
-fn test_clipboard() {
-	app := empty_app()
-	_ := app.rpc_clipboard_get('[]') // X11/xclip only
-
-	res2 := app.rpc_clipboard_set('[]')
-	assert res2.contains('error')
-}
-
-fn test_exec() {
-	app := empty_app()
-	res := app.rpc_exec('["echo hello123"]')
-	obj := json_str(res) or { panic('bad json: $res') }
-	assert obj.as_map()['output'].str().trim_space() == 'hello123'
-
-	res2 := app.rpc_exec('[]')
-	assert res2.contains('error')
-}
-
-fn test_which() {
-	app := empty_app()
-	res := app.rpc_which('["sh"]')
-	obj := json_str(res) or { panic('bad json: $res') }
-	assert obj.as_map()['found'].bool() == true
-
-	res2 := app.rpc_which('["__nonexistent_cmd_xyz__"]')
-	obj2 := json_str(res2) or { panic('bad json: $res2') }
-	assert obj2.as_map()['found'].bool() == false
-
-	res3 := app.rpc_which('[]')
-	assert res3.contains('error')
-}
-
-fn test_exists() {
-	app := empty_app()
-	assert app.rpc_exists('["/tmp"]').contains('true')
-	assert app.rpc_exists('["/nonexistent_xyzzy"]').contains('false')
-	assert app.rpc_exists('[]').contains('error')
-}
-
-fn test_is_dir() {
-	app := empty_app()
-	assert app.rpc_is_dir('["/tmp"]').contains('true')
-	assert app.rpc_is_dir('["/etc/hosts"]').contains('false')
-	assert app.rpc_is_dir('[]').contains('error')
-}
-
-fn test_mkdir_remove() {
-	app := empty_app()
-	tmp := os.join_path(os.temp_dir(), 'v_test_mkdir_${os.pid()}')
-	os.rmdir_all(tmp) or {}
-
-	res := app.rpc_mkdir('["$tmp"]')
-	assert res.contains('success')
-	assert os.is_dir(tmp)
-
-	res2 := app.rpc_remove('["$tmp"]')
-	assert res2.contains('success')
-	assert !os.exists(tmp)
-
-	res3 := app.rpc_mkdir('[]')
-	assert res3.contains('error')
-
-	res4 := app.rpc_remove('[]')
-	assert res4.contains('error')
-}
-
-fn test_copy_move() {
-	app := empty_app()
-	tmp := os.join_path(os.temp_dir(), 'v_test_cp_${os.pid()}')
-	src := tmp + '.src'
-	dst := tmp + '.dst'
-	moved := tmp + '.moved'
-	os.write_file(src, 'copydata') or { panic('write src') }
-	defer { os.rm(src) or {}; os.rm(dst) or {}; os.rm(moved) or {} }
-
-	res := app.rpc_copy('["$src", "$dst"]')
-	assert res.contains('success')
-	assert os.read_file(dst) or { '' } == 'copydata'
-
-	res2 := app.rpc_move('["$dst", "$moved"]')
-	assert res2.contains('success')
-	assert !os.exists(dst)
-	assert os.read_file(moved) or { '' } == 'copydata'
-
-	res3 := app.rpc_copy('[]')
-	assert res3.contains('error')
-
-	res4 := app.rpc_move('[]')
-	assert res4.contains('error')
-}
-
-fn test_rpc_handler_not_found() {
-	app := empty_app()
-	res := '{"error": "Handler not found"}'
-	assert res.contains('Handler not found')
-}
-
-fn test_disk_usage_invalid_path() {
-	app := empty_app()
-	res := app.rpc_disk_usage('["/nonexistent_xyzzy"]')
-	obj := json_str(res) or { panic('bad json: $res') }
-	m := obj.as_map()
-	assert 'error' in m
-}
-
-fn test_uname_short_output() {
-	app := empty_app()
-	res := app.rpc_uname('[]')
-	obj := json_str(res) or { panic('bad json: $res') }
-	m := obj.as_map()
-	assert m['sysname'].str() != ''
-}
-
-fn test_memory_info_values() {
-	app := empty_app()
-	res := app.rpc_memory_info('[]')
-	obj := json_str(res) or { panic('bad json: $res') }
-	m := obj.as_map()
-	total := m['total'].f64()
-	available := m['available'].f64()
-	usedPercent := m['usedPercent'].f64()
-	assert total > 0
-	assert available >= 0
-	assert usedPercent >= 0
-	assert usedPercent <= 100
-}
-
-fn test_uptime_positive() {
-	app := empty_app()
-	res := app.rpc_uptime('[]')
-	obj := json_str(res) or { panic('bad json: $res') }
-	m := obj.as_map()
-	seconds := m['seconds'].f64()
-	assert seconds >= 0
 }
 
 fn test_stat_file() {
-	app := empty_app()
+	mut app := empty_app()
 	os.write_file('/tmp/v_test_stat_file', 'test') or {}
 	defer { os.rm('/tmp/v_test_stat_file') or {} }
-	
-	res := app.rpc_stat('["/tmp/v_test_stat_file"]')
-	obj := json_str(res) or { panic('bad json: $res') }
-	m := obj.as_map()
+
+	res := rpc(mut app, 'stat', '["/tmp/v_test_stat_file"]')
+	m := jmap(res)
 	assert m['isDir'].bool() == false
 	assert m['size'].u64() > 0
 }
 
 fn test_stat_nonexistent() {
-	app := empty_app()
-	res := app.rpc_stat('["/nonexistent_xyzzy"]')
-	obj := json_str(res) or { panic('bad json: $res') }
-	m := obj.as_map()
+	mut app := empty_app()
+	res := rpc(mut app, 'stat', '["/nonexistent_xyzzy"]')
+	m := jmap(res)
 	assert 'error' in m
 }
 
+fn test_stat_mode_field() {
+	mut app := empty_app()
+	res := rpc(mut app, 'stat', '["/tmp"]')
+	m := jmap(res)
+	assert m['mode'].int() >= 0
+}
+
+fn test_stat_symlink() {
+	mut app := empty_app()
+	tmp := os.join_path(os.temp_dir(), 'v_test_symlink')
+	target := os.join_path(os.temp_dir(), 'v_test_symlink_target')
+	os.write_file(target, 'link target') or {}
+	os.symlink(target, tmp) or { return }
+	defer { os.rm(tmp) or {}; os.rm(target) or {} }
+
+	res := rpc(mut app, 'stat', '["$tmp"]')
+	m := jmap(res)
+	assert m['isLink'].bool() == true
+}
+
+fn test_glob() {
+	mut app := empty_app()
+	res := rpc(mut app, 'glob', '["/tmp/*"]')
+	obj := jmap(res)
+	assert 'matches' in obj
+
+	res2 := rpc(mut app, 'glob', '["/nonexistent_xyzzy/*"]')
+	assert jmap(res2)['matches'].arr().len == 0
+
+	res3 := rpc(mut app, 'glob', '[]')
+	assert res3.contains('error')
+}
+
 fn test_glob_with_files() {
-	app := empty_app()
+	mut app := empty_app()
 	os.write_file('/tmp/v_test_glob.txt', 'test') or {}
 	defer { os.rm('/tmp/v_test_glob.txt') or {} }
-	
-	res := app.rpc_glob('["/tmp/v_test_glob.txt"]')
-	obj := json_str(res) or { panic('bad json: $res') }
-	matches := obj.as_map()['matches'].arr()
+
+	res := rpc(mut app, 'glob', '["/tmp/v_test_glob.txt"]')
+	matches := jmap(res)['matches'].arr()
 	assert matches.len > 0
 }
 
-fn test_list_dir_with_entries() {
-	app := empty_app()
-	res := app.rpc_list_dir('["/tmp"]')
-	obj := json_str(res) or { panic('bad json: $res') }
-	entries := obj.as_map()['entries'].arr()
-	assert entries.len > 0
+fn test_glob_complex_pattern() {
+	mut app := empty_app()
+	os.write_file('/tmp/v_test_glob_complex.txt', 'test') or {}
+	defer { os.rm('/tmp/v_test_glob_complex.txt') or {} }
+
+	res := rpc(mut app, 'glob', '["/tmp/v_test_glob_*.txt"]')
+	matches := jmap(res)['matches'].arr()
+	assert matches.len > 0
 }
 
-fn test_write_read_roundtrip() {
-	app := empty_app()
-	tmp := os.join_path(os.temp_dir(), 'v_test_roundtrip_${os.pid()}.txt')
-	content := 'hello roundtrip ${os.pid()}'
-	defer { os.rm(tmp) or {} }
-	
-	res := app.rpc_write_file(json.encode([tmp, content]))
+fn test_exists() {
+	mut app := empty_app()
+	assert rpc(mut app, 'exists', '["/tmp"]').contains('true')
+	assert rpc(mut app, 'exists', '["/nonexistent_xyzzy"]').contains('false')
+	assert rpc(mut app, 'exists', '[]').contains('error')
+}
+
+fn test_is_dir() {
+	mut app := empty_app()
+	assert rpc(mut app, 'isDir', '["/tmp"]').contains('true')
+	assert rpc(mut app, 'isDir', '["/etc/hosts"]').contains('false')
+	assert rpc(mut app, 'isDir', '[]').contains('error')
+}
+
+fn test_mkdir_remove() {
+	mut app := empty_app()
+	tmp := os.join_path(os.temp_dir(), 'v_test_mkdir')
+	os.rmdir_all(tmp) or {}
+
+	res := rpc(mut app, 'mkdir', '["$tmp"]')
 	assert res.contains('success')
-	
-	res2 := app.rpc_read_file(json.encode([tmp]))
-	obj := json_str(res2) or { panic('bad json: $res2') }
-	assert obj.as_map()['content'].str() == content
+	assert os.is_dir(tmp)
+
+	res2 := rpc(mut app, 'remove', '["$tmp"]')
+	assert res2.contains('success')
+	assert !os.exists(tmp)
+
+	res3 := rpc(mut app, 'mkdir', '[]')
+	assert res3.contains('error')
+
+	res4 := rpc(mut app, 'remove', '[]')
+	assert res4.contains('error')
 }
 
 fn test_mkdir_nested() {
-	app := empty_app()
-	tmp := os.join_path(os.temp_dir(), 'v_test_nested_${os.pid()}')
+	mut app := empty_app()
+	tmp := os.join_path(os.temp_dir(), 'v_test_nested')
 	nested := os.join_path(tmp, 'a', 'b', 'c')
 	defer { os.rmdir_all(tmp) or {} }
-	
-	res := app.rpc_mkdir(json.encode([nested]))
+
+	res := rpc(mut app, 'mkdir', json.encode([nested]))
 	assert res.contains('success')
 	assert os.is_dir(nested)
 }
 
+fn test_mkdir_already_exists() {
+	mut app := empty_app()
+	tmp := os.join_path(os.temp_dir(), 'v_test_mkdir_exists')
+	os.mkdir_all(tmp) or {}
+	defer { os.rmdir_all(tmp) or {} }
+
+	res := rpc(mut app, 'mkdir', '["$tmp"]')
+	assert res.contains('success')
+}
+
 fn test_remove_file() {
-	app := empty_app()
-	tmp := os.join_path(os.temp_dir(), 'v_test_rm_file_${os.pid()}.txt')
+	mut app := empty_app()
+	tmp := os.join_path(os.temp_dir(), 'v_test_rm_file.txt')
 	os.write_file(tmp, 'delete me') or {}
-	
-	res := app.rpc_remove(json.encode([tmp]))
+
+	res := rpc(mut app, 'remove', json.encode([tmp]))
 	assert res.contains('success')
 	assert !os.exists(tmp)
 }
 
 fn test_remove_directory() {
-	app := empty_app()
-	tmp := os.join_path(os.temp_dir(), 'v_test_rm_dir_${os.pid()}')
+	mut app := empty_app()
+	tmp := os.join_path(os.temp_dir(), 'v_test_rm_dir')
 	os.mkdir_all(tmp) or {}
 	os.write_file(os.join_path(tmp, 'file.txt'), 'content') or {}
-	
-	res := app.rpc_remove(json.encode([tmp]))
+
+	res := rpc(mut app, 'remove', json.encode([tmp]))
 	assert res.contains('success')
 	assert !os.exists(tmp)
 }
 
+fn test_copy_move() {
+	mut app := empty_app()
+	src := os.join_path(os.temp_dir(), 'v_test_cp_src')
+	dst := os.join_path(os.temp_dir(), 'v_test_cp_dst')
+	moved := os.join_path(os.temp_dir(), 'v_test_cp_moved')
+	os.write_file(src, 'copydata') or { panic('write src') }
+	defer { os.rm(src) or {}; os.rm(dst) or {}; os.rm(moved) or {} }
+
+	res := rpc(mut app, 'copy', '["$src", "$dst"]')
+	assert res.contains('success')
+	assert os.read_file(dst) or { '' } == 'copydata'
+
+	res2 := rpc(mut app, 'move', '["$dst", "$moved"]')
+	assert res2.contains('success')
+	assert !os.exists(dst)
+	assert os.read_file(moved) or { '' } == 'copydata'
+
+	res3 := rpc(mut app, 'copy', '[]')
+	assert res3.contains('error')
+
+	res4 := rpc(mut app, 'move', '[]')
+	assert res4.contains('error')
+}
+
 fn test_copy_directory() {
-	app := empty_app()
-	src := os.join_path(os.temp_dir(), 'v_test_cp_dir_${os.pid()}')
-	dst := os.join_path(os.temp_dir(), 'v_test_cp_dir_dst_${os.pid()}')
+	mut app := empty_app()
+	src := os.join_path(os.temp_dir(), 'v_test_cp_dir')
+	dst := os.join_path(os.temp_dir(), 'v_test_cp_dir_dst')
 	defer { os.rmdir_all(src) or {}; os.rmdir_all(dst) or {} }
-	
+
 	os.mkdir_all(src) or {}
 	os.write_file(os.join_path(src, 'file.txt'), 'content') or {}
-	
-	res := app.rpc_copy(json.encode([src, dst]))
+
+	res := rpc(mut app, 'copy', json.encode([src, dst]))
 	assert res.contains('success')
 	assert os.is_dir(dst)
 	assert os.read_file(os.join_path(dst, 'file.txt')) or { '' } == 'content'
 }
 
+// --- Tools plugin tests ---
+
+fn test_env() {
+	mut app := empty_app()
+	res := rpc(mut app, 'env', '["HOME"]')
+	m := jmap(res)
+	assert m['value'].str() != ''
+
+	res2 := rpc(mut app, 'env', '[]')
+	assert res2.contains('error')
+
+	res3 := rpc(mut app, 'env', '["__NONEXISTENT_VAR_12345__"]')
+	assert res3.contains('error')
+}
+
 fn test_env_multiple_keys() {
-	app := empty_app()
-	
-	// Test HOME
-	res1 := app.rpc_env('["HOME"]')
+	mut app := empty_app()
+	res1 := rpc(mut app, 'env', '["HOME"]')
 	assert res1.contains('value')
-	
-	// Test PATH
-	res2 := app.rpc_env('["PATH"]')
+
+	res2 := rpc(mut app, 'env', '["PATH"]')
 	assert res2.contains('value')
-	
-	// Test USER
-	res3 := app.rpc_env('["USER"]')
+
+	res3 := rpc(mut app, 'env', '["USER"]')
 	if !res3.contains('error') {
 		assert res3.contains('value')
 	}
 }
 
-fn test_which_multiple() {
-	app := empty_app()
-	
-	// Common commands
-	for cmd in ['sh', 'bash', 'ls', 'cat'] {
-		res := app.rpc_which('["$cmd"]')
-		obj := json_str(res) or { panic('bad json: $res') }
-		assert obj.as_map()['found'].bool() == true
-	}
+fn test_env_empty_key() {
+	mut app := empty_app()
+	res := rpc(mut app, 'env', '[""]')
+	assert res.len > 0
+}
+
+fn test_clipboard() {
+	mut app := empty_app()
+	_ := rpc(mut app, 'clipboardGet', '[]')
+
+	res2 := rpc(mut app, 'clipboardSet', '[]')
+	assert res2.contains('error')
+}
+
+fn test_exec() {
+	mut app := empty_app()
+	res := rpc(mut app, 'exec', '["echo hello123"]')
+	m := jmap(res)
+	assert m['output'].str().trim_space() == 'hello123'
+
+	res2 := rpc(mut app, 'exec', '[]')
+	assert res2.contains('error')
 }
 
 fn test_exec_multiple_commands() {
-	app := empty_app()
-	
-	// Test echo
-	res1 := app.rpc_exec('["echo test123"]')
-	obj1 := json_str(res1) or { panic('bad json: $res1') }
-	assert obj1.as_map()['output'].str().trim_space() == 'test123'
-	
-	// Test pwd
-	res2 := app.rpc_exec('["pwd"]')
-	obj2 := json_str(res2) or { panic('bad json: $res2') }
-	assert obj2.as_map()['output'].str().trim_space() != ''
+	mut app := empty_app()
+	res1 := rpc(mut app, 'exec', '["echo test123"]')
+	assert jmap(res1)['output'].str().trim_space() == 'test123'
+
+	res2 := rpc(mut app, 'exec', '["pwd"]')
+	assert jmap(res2)['output'].str().trim_space() != ''
 }
 
-fn test_stat_mode_field() {
-	app := empty_app()
-	res := app.rpc_stat('["/tmp"]')
-	obj := json_str(res) or { panic('bad json: $res') }
-	m := obj.as_map()
-	// mode should be an integer (may be 0 as per code)
-	assert m['mode'].int() >= 0
+fn test_exec_empty_output() {
+	mut app := empty_app()
+	res := rpc(mut app, 'exec', '["true"]')
+	assert jmap(res)['output'].str().trim_space() == ''
 }
+
+fn test_exec_stderr() {
+	mut app := empty_app()
+	res := rpc(mut app, 'exec', '["echo error >&2"]')
+	m := jmap(res)
+	assert m['output'].str().contains('error')
+}
+
+fn test_which() {
+	mut app := empty_app()
+	res := rpc(mut app, 'which', '["sh"]')
+	m := jmap(res)
+	assert m['found'].bool() == true
+
+	res2 := rpc(mut app, 'which', '["__nonexistent_cmd_xyz__"]')
+	m2 := jmap(res2)
+	assert m2['found'].bool() == false
+
+	res3 := rpc(mut app, 'which', '[]')
+	assert res3.contains('error')
+}
+
+fn test_which_multiple() {
+	mut app := empty_app()
+	for cmd in ['sh', 'bash', 'ls', 'cat'] {
+		res := rpc(mut app, 'which', '["$cmd"]')
+		assert jmap(res)['found'].bool() == true
+	}
+}
+
+// --- Git plugin tests ---
+
+fn test_git_list_empty() {
+	mut app := empty_app()
+	res := rpc(mut app, 'gitList', '[]')
+	assert 'repos' in jmap(res)
+}
+
+fn test_git_trash_list_empty() {
+	mut app := empty_app()
+	res := rpc(mut app, 'gitTrashList', '[]')
+	assert 'repos' in jmap(res)
+}
+
+fn test_git_clone_invalid_url() {
+	mut app := empty_app()
+	res := rpc(mut app, 'gitClone', '["https://not-a-real-repo.example.com/repo.git"]')
+	assert res.contains('error')
+}
+
+fn test_git_remove_missing() {
+	mut app := empty_app()
+	res := rpc(mut app, 'gitRemove', '["nonexistent_repo_xyzzy"]')
+	assert res.contains('error')
+}
+
+fn test_git_restore_missing() {
+	mut app := empty_app()
+	res := rpc(mut app, 'gitRestore', '["nonexistent_repo_xyzzy"]')
+	assert res.contains('error')
+}
+
+fn test_git_clone_missing_url() {
+	mut app := empty_app()
+	res := rpc(mut app, 'gitClone', '[]')
+	assert res.contains('error')
+}
+
+fn test_git_remove_missing_arg() {
+	mut app := empty_app()
+	res := rpc(mut app, 'gitRemove', '[]')
+	assert res.contains('error')
+}
+
+fn test_git_restore_missing_arg() {
+	mut app := empty_app()
+	res := rpc(mut app, 'gitRestore', '[]')
+	assert res.contains('error')
+}
+
+// --- Processes plugin tests ---
+
+fn test_ps_list() {
+	mut app := empty_app()
+	res := rpc(mut app, 'psList', '["cpu"]')
+	// Should return a JSON array
+	assert res.len > 0
+	assert res.contains('[')
+}
+
+fn test_ps_kill_nonexistent() {
+	mut app := empty_app()
+	res := rpc(mut app, 'psKill', '["99999999"]')
+	// Should either succeed or return error — both acceptable
+	assert res.len > 0
+}
+
+fn test_ps_list_empty_arg() {
+	mut app := empty_app()
+	res := rpc(mut app, 'psList', '[]')
+	// Should still work with default sort
+	assert res.len > 0
+}
+
+// --- Probe plugin tests ---
+
+fn test_system_probe() {
+	mut app := empty_app()
+	res := rpc(mut app, 'systemProbe', '[]')
+	m := jmap(res)
+	assert 'loadAvg' in m
+	assert 'procsTotal' in m
+	assert 'cpuCores' in m
+	assert m['cpuCores'].int() > 0
+}
+
+fn test_system_probe_load_avg() {
+	mut app := empty_app()
+	res := rpc(mut app, 'systemProbe', '[]')
+	m := jmap(res)
+	load_avg := m['loadAvg'].arr()
+	assert load_avg.len == 3
+	assert load_avg[0].f64() >= 0
+}
+
+// --- Handler registration ---
 
 fn test_registration_completeness() {
-	app := empty_app()
-	
-	// Verify all registered RPCs exist as methods
+	mut app := empty_app()
 	expected_rpcs := [
-		'systemInfo', 'hostname', 'username', 'uname', 'memoryInfo', 
-		'uptime', 'diskUsage', 'listDir', 'readFile', 'writeFile', 
-		'stat', 'glob', 'env', 'clipboardGet', 'clipboardSet', 
-		'exec', 'which', 'exists', 'isDir', 'mkdir', 'remove', 
-		'copy', 'move'
+		'systemInfo', 'hostname', 'username', 'uname', 'memoryInfo',
+		'uptime', 'diskUsage', 'listDir', 'readFile', 'writeFile',
+		'stat', 'glob', 'env', 'clipboardGet', 'clipboardSet',
+		'exec', 'which', 'exists', 'isDir', 'mkdir', 'remove',
+		'copy', 'move',
 	]
-	
-	assert expected_rpcs.len == 23
+	for rpc_name in expected_rpcs {
+		assert rpc_name in app.handlers, 'Missing RPC handler: $rpc_name'
+	}
+}
+
+fn test_rpc_handler_not_found() {
+	mut app := empty_app()
+	res := rpc(mut app, 'nonexistent', '[]')
+	assert res.contains('Handler not found')
 }

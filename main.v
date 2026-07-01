@@ -6,11 +6,17 @@ import src.plugins.system
 import src.plugins.files
 import src.plugins.git
 import src.plugins.tools
+import src.plugins.processes
+import src.plugins.probe
+import src.plugins.search
+import src.plugins.fstree
+import src.plugins.metrics
+import src.plugins.sqlite
 
 $if !test {
 fn main() {
-	html_content := os.read_file('frontend/dist/app.html') or {
-		eprintln("Failed to read frontend/dist/app.html.")
+	html_content := os.read_file('frontend/dist/index.html') or {
+		eprintln("Failed to read frontend/dist/index.html.")
 		exit(1)
 	}
 
@@ -22,6 +28,12 @@ fn main() {
 	files.register(mut app)
 	git.register(mut app)
 	tools.register(mut app)
+	processes.register(mut app)
+	probe.register(mut app)
+	search.register(mut app)
+	fstree.register(mut app)
+	metrics.register(mut app)
+	sqlite.register(mut app)
 
 	app.set_html(html_content)
 	app.run()
