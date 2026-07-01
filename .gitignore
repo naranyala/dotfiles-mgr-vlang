@@ -6,5 +6,7 @@ vcpkg_installed/
 *.o
 *.a
 /tmp/
+lib/webview/
+lib/webview.zip
 
 **/node_modules
