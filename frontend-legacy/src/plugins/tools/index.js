@@ -14,7 +14,7 @@ export async function init() {}
 
 export function onMount(component) {
 	component.delegate('click', '#btn-env', async () => {
-		const res = await window.rpc.env(state.envKey)
+		const res = await window.rpc.envGet(state.envKey)
 		if (res.error) state.envVal = 'not set'
 		else state.envVal = res.value
 	})

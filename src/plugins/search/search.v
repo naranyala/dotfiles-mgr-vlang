@@ -19,5 +19,5 @@ fn rpc_search_query(req string, mut app &core.App) string {
 }
 
 pub fn register(mut app core.App) {
-	app.register_rpc('search_query', fn (req string, mut app &core.App) string { return rpc_search_query(req, mut app) })
+	app.register_rpc('shell.search_query', fn (req string, mut app &core.App) string { return rpc_search_query(req, mut app) })
 }

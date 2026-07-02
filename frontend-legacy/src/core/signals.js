@@ -64,12 +64,15 @@ export function effect(fn) {
 		activeEffect = run
 		let result
 		try { result = fn() }
+		catch (e) { console.error('[Signal] effect error:', e) }
 		finally { activeEffect = null }
 
 		if (typeof result === 'function') {
 			cleanupMap.get(run).add(result)
 		} else if (result instanceof Promise) {
-			result.then(r => { if (typeof r === 'function' && cleanupMap.has(run)) cleanupMap.get(run).add(r) })
+			result
+				.then(r => { if (typeof r === 'function' && cleanupMap.has(run)) cleanupMap.get(run).add(r) })
+				.catch(e => console.error('[Signal] async effect error:', e))
 		}
 	}
 	run()

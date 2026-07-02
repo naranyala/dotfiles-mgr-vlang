@@ -119,9 +119,9 @@ fn rpc_git_trash_list(req string, mut app &core.App) string {
 }
 
 pub fn register(mut app core.App) {
-	app.register_rpc('gitClone', fn (req string, mut app &core.App) string { return rpc_git_clone(req, mut app) })
-	app.register_rpc('gitList', fn (req string, mut app &core.App) string { return rpc_git_list(req, mut app) })
-	app.register_rpc('gitRemove', fn (req string, mut app &core.App) string { return rpc_git_remove(req, mut app) })
-	app.register_rpc('gitRestore', fn (req string, mut app &core.App) string { return rpc_git_restore(req, mut app) })
-	app.register_rpc('gitTrashList', fn (req string, mut app &core.App) string { return rpc_git_trash_list(req, mut app) })
+	app.register_rpc('shell.gitClone', fn (req string, mut app &core.App) string { return rpc_git_clone(req, mut app) })
+	app.register_rpc('shell.gitList', fn (req string, mut app &core.App) string { return rpc_git_list(req, mut app) })
+	app.register_rpc('shell.gitRemove', fn (req string, mut app &core.App) string { return rpc_git_remove(req, mut app) })
+	app.register_rpc('shell.gitRestore', fn (req string, mut app &core.App) string { return rpc_git_restore(req, mut app) })
+	app.register_rpc('shell.gitTrashList', fn (req string, mut app &core.App) string { return rpc_git_trash_list(req, mut app) })
 }

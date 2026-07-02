@@ -20,28 +20,22 @@ globalThis.customElements = globalThis.customElements || {
 }
 globalThis.window = globalThis.window || globalThis
 
-// ─── Mock window[method] bindings (simulates webview_bind) ──────
-const _raw = {}
-const responses = new Proxy(_raw, {
-	set(target, prop, value) {
-		target[prop] = value
-		if (typeof value === 'function') {
-			globalThis.window[prop] = (...args) => JSON.stringify(value(...args))
-		}
-		return true
-	},
-})
+// ─── Mock backendRPC ────────────────────────────────────────────
+const responses = {}
+function mockBackendRPC(method, ...args) {
+	const fn = responses[method]
+	if (!fn) return JSON.stringify({ error: true, message: `No handler for ${method}` })
+	return JSON.stringify(fn(...args))
+}
 
 beforeAll(async () => {
 	globalThis.window = globalThis.window || globalThis
+	globalThis.window.backendRPC = mockBackendRPC
 	await import('../core/rpc.js')
 })
 
 beforeEach(() => {
-	for (const k in Object.keys(_raw)) {
-		delete _raw[k]
-		delete globalThis.window[k]
-	}
+	for (const k in responses) delete responses[k]
 })
 
 // ═══════════════════════════════════════════════════════════════

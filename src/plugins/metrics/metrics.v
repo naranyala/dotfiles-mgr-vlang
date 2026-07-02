@@ -37,5 +37,5 @@ fn rpc_metrics_get_stats(req string, mut app &core.App) string {
 }
 
 pub fn register(mut app core.App) {
-	app.register_rpc('metrics_getStats', fn (req string, mut app &core.App) string { return rpc_metrics_get_stats(req, mut app) })
+	app.register_rpc('shell.metrics_getStats', fn (req string, mut app &core.App) string { return rpc_metrics_get_stats(req, mut app) })
 }

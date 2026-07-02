@@ -3,6 +3,7 @@ import { launchers } from './launchers.js'
 import * as health from '../plugins/health/index.js'
 
 export function renderTabBar(tabs, active) {
+	const hasCloseable = tabs.some(t => t.canClose)
 	return `<div class="tab-bar">
 		${tabs.map(t => `
 			<div class="tab${t.id === active ? ' active' : ''}" data-tab="${t.id}">
@@ -10,6 +11,7 @@ export function renderTabBar(tabs, active) {
 				<span>${t.title}</span>
 				${t.canClose ? `<button class="tab-close" data-close-tab="${t.id}">✕</button>` : ''}
 			</div>`).join('')}
+		${hasCloseable ? '<button class="tab-close-all" data-close-all>✕ Close All</button>' : ''}
 	</div>`
 }
 
@@ -20,20 +22,18 @@ export function renderTabContent(tabs, active, q, visible) {
 				${t.id === 'home'
 					? `
 						<div class="search-row">
-							<input id="card-search" placeholder="Search features…" value="${q}" />
+							<div class="search-wrap">
+								<input id="card-search" placeholder="Search features…" value="${q}" />
+								${q ? '<button class="search-clear" id="btn-search-clear">✕</button>' : ''}
+							</div>
 						</div>
-						${visible.length
-							? `<div class="launcher-grid">
-								${visible.map(c => `
-									<div class="launcher-item" data-open-tab="${c.id}">
-										<span class="launcher-icon">${c.icon}</span>
-										<div class="launcher-info">
-											<div class="launcher-title">${c.title}</div>
-											<div class="launcher-desc">${c.desc}</div>
-										</div>
-									</div>).join('')}
-							</div>`
-							: `<div class="no-match">No features match "${q}"</div>`}
+						${visible.length > 0 ? '<div class="launcher-grid">' + visible.map(c =>
+								'<div class="launcher-item" data-open-tab="' + c.id + '">' +
+								'<div class="launcher-info">' +
+								'<div class="launcher-title">' + c.title + '</div>' +
+								'<div class="launcher-desc">' + c.desc + '</div>' +
+								'</div></div>').join('') + '</div>'
+							: '<div class="no-match">No features match &quot;' + q + '&quot;</div>'}
 					`
 					: t.content()}
 
@@ -44,18 +44,18 @@ export function renderTabContent(tabs, active, q, visible) {
 export function renderStatusBar(bottomOpen, bottomTab, sideOpen, sideTab) {
 	return `<div class="status-bar">
 		<div class="status-left">
-			<button class="sb-btn${bottomOpen ? ' active' : ''}" id="btn-bottom-drawer">⊞ Drawer</button>
+			<button class="sb-btn${bottomOpen ? ' active' : ''}" id="btn-bottom-drawer">Drawer</button>
 			<span class="sb-sep"></span>
-			<button class="sb-btn${bottomTab === 'quick' && bottomOpen ? ' active' : ''}" data-bottom-tab="quick">⚡ Quick</button>
-			<button class="sb-btn${bottomTab === 'logs' && bottomOpen ? ' active' : ''}" data-bottom-tab="logs">〉 Logs</button>
-			<button class="sb-btn${bottomTab === 'health' && bottomOpen ? ' active' : ''}" data-bottom-tab="health">♥ Health</button>
+			<button class="sb-btn${bottomTab === 'quick' && bottomOpen ? ' active' : ''}" data-bottom-tab="quick">Quick</button>
+			<button class="sb-btn${bottomTab === 'logs' && bottomOpen ? ' active' : ''}" data-bottom-tab="logs">Logs</button>
+			<button class="sb-btn${bottomTab === 'health' && bottomOpen ? ' active' : ''}" data-bottom-tab="health">Health</button>
 		</div>
 		<div class="status-right">
-			<button class="sb-btn${sideTab === 'info' && sideOpen ? ' active' : ''}" data-side-tab="info">ℹ Info</button>
-			<button class="sb-btn${sideTab === 'plugins' && sideOpen ? ' active' : ''}" data-side-tab="plugins">⚙ Plugins</button>
-			<button class="sb-btn${sideTab === 'debug' && sideOpen ? ' active' : ''}" data-side-tab="debug">⌘ Debug</button>
+			<button class="sb-btn${sideTab === 'info' && sideOpen ? ' active' : ''}" data-side-tab="info">Info</button>
+			<button class="sb-btn${sideTab === 'plugins' && sideOpen ? ' active' : ''}" data-side-tab="plugins">Plugins</button>
+			<button class="sb-btn${sideTab === 'debug' && sideOpen ? ' active' : ''}" data-side-tab="debug">Debug</button>
 			<span class="sb-sep"></span>
-			<button class="sb-btn${sideOpen ? ' active' : ''}" id="btn-side-panel">◫ Panel</button>
+			<button class="sb-btn${sideOpen ? ' active' : ''}" id="btn-side-panel">Panel</button>
 		</div>
 	</div>`
 }
@@ -73,16 +73,15 @@ export function renderBottomDrawer(bottomOpen, bottomTab) {
 			<button class="drawer-close" id="btn-close-bottom-drawer">✕</button>
 		</div>
 		<div class="drawer-tabs">
-			<button class="drawer-tab${bottomTab === 'quick' ? ' active' : ''}" data-bottom-tab="quick">⚡ Quick</button>
-			<button class="drawer-tab${bottomTab === 'logs' ? ' active' : ''}" data-bottom-tab="logs">〉 Logs</button>
-			<button class="drawer-tab${bottomTab === 'health' ? ' active' : ''}" data-bottom-tab="health">♥ Health</button>
+			<button class="drawer-tab${bottomTab === 'quick' ? ' active' : ''}" data-bottom-tab="quick">Quick</button>
+			<button class="drawer-tab${bottomTab === 'logs' ? ' active' : ''}" data-bottom-tab="logs">Logs</button>
+			<button class="drawer-tab${bottomTab === 'health' ? ' active' : ''}" data-bottom-tab="health">Health</button>
 		</div>
 		<div class="drawer-body">
 			${bottomTab === 'quick' ? `
 				<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">
 					${launchers.filter(c => c.id !== 'dashboard').map(c => `
 						<div class="launcher-item" data-open-tab="${c.id}" style="padding:10px 14px">
-							<span class="launcher-icon" style="font-size:1.2rem;width:24px">${c.icon}</span>
 							<div class="launcher-info">
 								<div class="launcher-title" style="font-size:0.85rem">${c.title}</div>
 								<div class="launcher-desc" style="font-size:0.72rem">${c.desc}</div>

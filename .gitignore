@@ -1,5 +1,7 @@
 
 
+*.zip
+*.tar.gz
 
 main
 frontend/dist/

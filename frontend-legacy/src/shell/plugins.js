@@ -1,3 +1,4 @@
+import { registry } from './registry.js'
 import * as system from '../plugins/system/index.js'
 import * as git from '../plugins/git/index.js'
 import * as files from '../plugins/files/index.js'
@@ -9,14 +10,23 @@ import * as network from '../plugins/network/index.js'
 import * as probe from '../plugins/probe/index.js'
 import * as filetools from '../plugins/filetools/index.js'
 import * as theme from '../plugins/theme/index.js'
+import * as search from '../plugins/search/index.js'
+import * as metrics from '../plugins/metrics/index.js'
+import * as fstree from '../plugins/fstree/index.js'
+import * as sqlite from '../plugins/sqlite/index.js'
 
-export const plugins = [system, git, files, tools, health, processes, commands, network, probe, filetools, theme]
+export const plugins = [system, git, files, tools, health, processes, commands, network, probe, filetools, theme, search, metrics, fstree, sqlite]
 
-const pluginNames = ['system', 'git', 'files', 'tools', 'health', 'processes', 'commands', 'network', 'probe', 'filetools', 'theme']
+const pluginNames = ['system', 'git', 'files', 'tools', 'health', 'processes', 'commands', 'network', 'probe', 'filetools', 'theme', 'search', 'metrics', 'fstree', 'sqlite']
+
+for (let i = 0; i < plugins.length; i++) {
+	registry.register({ name: pluginNames[i], ...plugins[i] })
+}
 
 export function getPluginName(p) {
 	const idx = plugins.indexOf(p)
-	return pluginNames[idx] || `plugin-${idx}`
+	if (idx >= 0) return pluginNames[idx] || `plugin-${idx}`
+	return p.name || 'unknown'
 }
 
 export function mergeStates() {
@@ -43,6 +53,13 @@ export function collectPluginStates() {
 }
 
 export async function initAll() {
-	await Promise.all(plugins.map(p => p.init()))
-	setTimeout(() => window.dumpAllState(), 500)
+	const results = await Promise.allSettled(plugins.map((p, i) => p.init()))
+	for (let i = 0; i < results.length; i++) {
+		if (results[i].status === 'rejected') {
+			console.error(`[Plugin] ${pluginNames[i]} init failed:`, results[i].reason)
+		}
+	}
+	try {
+		if (window.dumpAllState) setTimeout(() => window.dumpAllState(), 500)
+	} catch (e) { console.error('[Plugin] dumpAllState failed:', e) }
 }

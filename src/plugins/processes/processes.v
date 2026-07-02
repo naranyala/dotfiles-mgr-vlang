@@ -55,6 +55,6 @@ fn rpc_ps_kill(req string, mut app &core.App) string {
 }
 
 pub fn register(mut app core.App) {
-	app.register_rpc('psList', fn (req string, mut app &core.App) string { return rpc_ps_list(req, mut app) })
-	app.register_rpc('psKill', fn (req string, mut app &core.App) string { return rpc_ps_kill(req, mut app) })
+	app.register_rpc('shell.psList', fn (req string, mut app &core.App) string { return rpc_ps_list(req, mut app) })
+	app.register_rpc('shell.psKill', fn (req string, mut app &core.App) string { return rpc_ps_kill(req, mut app) })
 }

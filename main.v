@@ -12,6 +12,10 @@ import src.plugins.search
 import src.plugins.fstree
 import src.plugins.metrics
 import src.plugins.sqlite
+import src.plugins.repo
+import src.plugins.state
+import src.plugins.llama
+import src.plugins.tts
 
 $if !test {
 fn main() {
@@ -34,6 +38,10 @@ fn main() {
 	fstree.register(mut app)
 	metrics.register(mut app)
 	sqlite.register(mut app)
+	repo.register(mut app)
+	state.register(mut app)
+	llama.register(mut app)
+	tts.register(mut app)
 
 	app.set_html(html_content)
 	app.run()

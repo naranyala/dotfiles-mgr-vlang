@@ -101,15 +101,15 @@ fn rpc_move(req string, mut app &core.App) string {
 }
 
 pub fn register(mut app core.App) {
-	app.register_rpc('listDir', fn (req string, mut app &core.App) string { return rpc_list_dir(req, mut app) })
-	app.register_rpc('readFile', fn (req string, mut app &core.App) string { return rpc_read_file(req, mut app) })
-	app.register_rpc('writeFile', fn (req string, mut app &core.App) string { return rpc_write_file(req, mut app) })
-	app.register_rpc('stat', fn (req string, mut app &core.App) string { return rpc_stat(req, mut app) })
-	app.register_rpc('glob', fn (req string, mut app &core.App) string { return rpc_glob(req, mut app) })
-	app.register_rpc('exists', fn (req string, mut app &core.App) string { return rpc_exists(req, mut app) })
-	app.register_rpc('isDir', fn (req string, mut app &core.App) string { return rpc_is_dir(req, mut app) })
-	app.register_rpc('mkdir', fn (req string, mut app &core.App) string { return rpc_mkdir(req, mut app) })
-	app.register_rpc('remove', fn (req string, mut app &core.App) string { return rpc_remove(req, mut app) })
-	app.register_rpc('copy', fn (req string, mut app &core.App) string { return rpc_copy(req, mut app) })
-	app.register_rpc('move', fn (req string, mut app &core.App) string { return rpc_move(req, mut app) })
+	app.register_rpc('shell.listDir', fn (req string, mut app &core.App) string { return rpc_list_dir(req, mut app) })
+	app.register_rpc('shell.readFile', fn (req string, mut app &core.App) string { return rpc_read_file(req, mut app) })
+	app.register_rpc('shell.writeFile', fn (req string, mut app &core.App) string { return rpc_write_file(req, mut app) })
+	app.register_rpc('shell.stat', fn (req string, mut app &core.App) string { return rpc_stat(req, mut app) })
+	app.register_rpc('shell.glob', fn (req string, mut app &core.App) string { return rpc_glob(req, mut app) })
+	app.register_rpc('shell.exists', fn (req string, mut app &core.App) string { return rpc_exists(req, mut app) })
+	app.register_rpc('shell.isDir', fn (req string, mut app &core.App) string { return rpc_is_dir(req, mut app) })
+	app.register_rpc('shell.mkdir', fn (req string, mut app &core.App) string { return rpc_mkdir(req, mut app) })
+	app.register_rpc('shell.remove', fn (req string, mut app &core.App) string { return rpc_remove(req, mut app) })
+	app.register_rpc('shell.copy', fn (req string, mut app &core.App) string { return rpc_copy(req, mut app) })
+	app.register_rpc('shell.move', fn (req string, mut app &core.App) string { return rpc_move(req, mut app) })
 }

@@ -7,7 +7,7 @@ import os
 fn C.getpid() int
 
 pub fn register_builtins(mut app App) {
-	app.register_rpc('log', fn (req string, mut a App) string {
+	app.register_rpc('shell.log', fn (req string, mut a App) string {
 		msg := util.get_arg(req, 0) or { "" }
 		level := util.get_arg(req, 1) or { "info" }
 		println("[FRONTEND] [${level.to_upper()}] ${msg}")
@@ -15,7 +15,7 @@ pub fn register_builtins(mut app App) {
 		return "{}"
 	})
 
-	app.register_rpc('dumpBackendState', fn (req string, mut a App) string {
+	app.register_rpc('shell.dumpBackendState', fn (req string, mut a App) string {
 		divider := '═'.repeat(60)
 		println('\n' + divider)
 		println('  BACKEND STATE DUMP')

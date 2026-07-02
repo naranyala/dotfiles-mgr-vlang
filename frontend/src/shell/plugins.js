@@ -14,10 +14,39 @@ import * as search from '../plugins/search/index.js'
 import * as metrics from '../plugins/metrics/index.js'
 import * as fstree from '../plugins/fstree/index.js'
 import * as sqlite from '../plugins/sqlite/index.js'
+import * as envManager from '../plugins/env-manager/index.js'
+import * as processMonitor from '../plugins/process-monitor/index.js'
+import * as taskManager from '../plugins/task-manager/index.js'
+import * as searchEverywhere from '../plugins/search-everywhere/index.js'
+import * as backendState from '../plugins/backend-state/index.js'
+import * as dotfilesGit from '../plugins/dotfiles-git/index.js'
+import * as dotfilesShell from '../plugins/dotfiles-shell/index.js'
+import * as dotfilesVim from '../plugins/dotfiles-vim/index.js'
+import * as dotfilesTmux from '../plugins/dotfiles-tmux/index.js'
+import * as dotfilesSsh from '../plugins/dotfiles-ssh/index.js'
+import * as dotfilesEditor from '../plugins/dotfiles-editor/index.js'
+import * as dotfilesSync from '../plugins/dotfiles-sync/index.js'
+import * as gitSummary from '../plugins/git-summary/index.js'
+import * as dotfilesBashrc from '../plugins/dotfiles-bashrc/index.js'
+import * as manpageReader from '../plugins/manpage-reader/index.js'
+import * as jobApplicantTracker from '../plugins/job-applicant-tracker/index.js'
+import * as llamaServer from '../plugins/llama-server/index.js'
+import * as ttsRunner from '../plugins/tts-runner/index.js'
+import * as mdToPdf from '../plugins/md-to-pdf/index.js'
+import * as pdfToSpeech from '../plugins/pdf-to-speech/index.js'
+import * as thumbnailMaker from '../plugins/thumbnail-maker/index.js'
+import * as formWizard from '../plugins/form-wizard/index.js'
+import * as slidingDrawer from '../plugins/sliding-drawer/index.js'
+import * as modalBackdrop from '../plugins/modal-backdrop/index.js'
+import * as treeview from '../plugins/treeview/index.js'
+import * as calculator from '../plugins/calculator/index.js'
+import * as accordion from '../plugins/accordion/index.js'
+import * as codeblock from '../plugins/codeblock/index.js'
+import * as kanbanBoard from '../plugins/kanban-board/index.js'
 
-export const plugins = [system, git, files, tools, health, processes, commands, network, probe, filetools, theme, search, metrics, fstree, sqlite]
+export const plugins = [system, git, files, tools, health, processes, commands, network, probe, filetools, theme, search, metrics, fstree, sqlite, envManager, processMonitor, taskManager, searchEverywhere, backendState, dotfilesGit, dotfilesShell, dotfilesVim, dotfilesTmux, dotfilesSsh, dotfilesEditor, dotfilesSync, gitSummary, dotfilesBashrc, manpageReader, jobApplicantTracker, llamaServer, ttsRunner, mdToPdf, pdfToSpeech, thumbnailMaker, formWizard, slidingDrawer, modalBackdrop, treeview, calculator, accordion, codeblock, kanbanBoard]
 
-const pluginNames = ['system', 'git', 'files', 'tools', 'health', 'processes', 'commands', 'network', 'probe', 'filetools', 'theme', 'search', 'metrics', 'fstree', 'sqlite']
+const pluginNames = ['system', 'git', 'files', 'tools', 'health', 'processes', 'commands', 'network', 'probe', 'filetools', 'theme', 'search', 'metrics', 'fstree', 'sqlite', 'envManager', 'processMonitor', 'taskManager', 'searchEverywhere', 'backendState', 'dotfilesGit', 'dotfilesShell', 'dotfilesVim', 'dotfilesTmux', 'dotfilesSsh', 'dotfilesEditor', 'dotfilesSync', 'gitSummary', 'dotfilesBashrc', 'manpageReader', 'jobApplicantTracker', 'llamaServer', 'ttsRunner', 'mdToPdf', 'pdfToSpeech', 'thumbnailMaker', 'formWizard', 'slidingDrawer', 'modal-backdrop', 'treeview', 'calculator', 'accordion', 'codeblock', 'kanbanBoard']
 
 for (let i = 0; i < plugins.length; i++) {
 	registry.register({ name: pluginNames[i], ...plugins[i] })
@@ -53,13 +82,6 @@ export function collectPluginStates() {
 }
 
 export async function initAll() {
-	const results = await Promise.allSettled(plugins.map((p, i) => p.init()))
-	for (let i = 0; i < results.length; i++) {
-		if (results[i].status === 'rejected') {
-			console.error(`[Plugin] ${pluginNames[i]} init failed:`, results[i].reason)
-		}
-	}
-	try {
-		if (window.dumpAllState) setTimeout(() => window.dumpAllState(), 500)
-	} catch (e) { console.error('[Plugin] dumpAllState failed:', e) }
+	await Promise.all(plugins.map(p => typeof p.init === 'function' ? p.init() : Promise.resolve()))
+	if (window.dumpAllState) setTimeout(() => window.dumpAllState(), 500)
 }

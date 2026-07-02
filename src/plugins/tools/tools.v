@@ -90,8 +90,15 @@ fn rpc_exec_bg(req string, mut app &core.App) string {
 }
 
 fn rpc_exec_read(req string, mut app &core.App) string {
-	_ = util.get_arg(req, 0) or { return util.err_resp('Missing jobId') }
-	return util.err_resp('execRead not implemented')
+	cmd := util.get_arg(req, 0) or { return util.err_resp('Missing command') }
+	if cmd.len == 0 {
+		return util.err_resp('Command cannot be empty')
+	}
+	if cmd.len > 65536 {
+		return util.err_resp('Command too long')
+	}
+	output := util.exec_output(cmd)
+	return json.encode({ 'output': output })
 }
 
 fn rpc_exec_kill(req string, mut app &core.App) string {
@@ -146,21 +153,21 @@ fn rpc_which(req string, mut app &core.App) string {
 }
 
 pub fn register(mut app core.App) {
-	app.register_rpc('envGet', fn (req string, mut app &core.App) string { return rpc_env_get(req, mut app) })
-	app.register_rpc('envSet', fn (req string, mut app &core.App) string { return rpc_env_set(req, mut app) })
-	app.register_rpc('envList', fn (req string, mut app &core.App) string { return rpc_env_list(req, mut app) })
-	app.register_rpc('cwd', fn (req string, mut app &core.App) string { return rpc_cwd(req, mut app) })
-	app.register_rpc('setCwd', fn (req string, mut app &core.App) string { return rpc_set_cwd(req, mut app) })
-	app.register_rpc('clipboardGet', fn (req string, mut app &core.App) string { return rpc_clipboard_get(req, mut app) })
-	app.register_rpc('clipboardSet', fn (req string, mut app &core.App) string { return rpc_clipboard_set(req, mut app) })
-	app.register_rpc('exec', fn (req string, mut app &core.App) string { return rpc_exec(req, mut app) })
-	app.register_rpc('execBg', fn (req string, mut app &core.App) string { return rpc_exec_bg(req, mut app) })
-	app.register_rpc('execRead', fn (req string, mut app &core.App) string { return rpc_exec_read(req, mut app) })
-	app.register_rpc('execKill', fn (req string, mut app &core.App) string { return rpc_exec_kill(req, mut app) })
-	app.register_rpc('processSignal', fn (req string, mut app &core.App) string { return rpc_process_signal(req, mut app) })
-	app.register_rpc('pathJoin', fn (req string, mut app &core.App) string { return rpc_path_join(req, mut app) })
-	app.register_rpc('pathDirname', fn (req string, mut app &core.App) string { return rpc_path_dirname(req, mut app) })
-	app.register_rpc('pathBasename', fn (req string, mut app &core.App) string { return rpc_path_basename(req, mut app) })
-	app.register_rpc('expandEnv', fn (req string, mut app &core.App) string { return rpc_expand_env(req, mut app) })
-	app.register_rpc('which', fn (req string, mut app &core.App) string { return rpc_which(req, mut app) })
+	app.register_rpc('shell.envGet', fn (req string, mut app &core.App) string { return rpc_env_get(req, mut app) })
+	app.register_rpc('shell.envSet', fn (req string, mut app &core.App) string { return rpc_env_set(req, mut app) })
+	app.register_rpc('shell.envList', fn (req string, mut app &core.App) string { return rpc_env_list(req, mut app) })
+	app.register_rpc('shell.cwd', fn (req string, mut app &core.App) string { return rpc_cwd(req, mut app) })
+	app.register_rpc('shell.setCwd', fn (req string, mut app &core.App) string { return rpc_set_cwd(req, mut app) })
+	app.register_rpc('shell.clipboardGet', fn (req string, mut app &core.App) string { return rpc_clipboard_get(req, mut app) })
+	app.register_rpc('shell.clipboardSet', fn (req string, mut app &core.App) string { return rpc_clipboard_set(req, mut app) })
+	app.register_rpc('shell.exec', fn (req string, mut app &core.App) string { return rpc_exec(req, mut app) })
+	app.register_rpc('shell.execBg', fn (req string, mut app &core.App) string { return rpc_exec_bg(req, mut app) })
+	app.register_rpc('shell.execRead', fn (req string, mut app &core.App) string { return rpc_exec_read(req, mut app) })
+	app.register_rpc('shell.execKill', fn (req string, mut app &core.App) string { return rpc_exec_kill(req, mut app) })
+	app.register_rpc('shell.processSignal', fn (req string, mut app &core.App) string { return rpc_process_signal(req, mut app) })
+	app.register_rpc('shell.pathJoin', fn (req string, mut app &core.App) string { return rpc_path_join(req, mut app) })
+	app.register_rpc('shell.pathDirname', fn (req string, mut app &core.App) string { return rpc_path_dirname(req, mut app) })
+	app.register_rpc('shell.pathBasename', fn (req string, mut app &core.App) string { return rpc_path_basename(req, mut app) })
+	app.register_rpc('shell.expandEnv', fn (req string, mut app &core.App) string { return rpc_expand_env(req, mut app) })
+	app.register_rpc('shell.which', fn (req string, mut app &core.App) string { return rpc_which(req, mut app) })
 }

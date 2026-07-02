@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync } from 'fs'
 import * as esbuild from 'esbuild'
 
+
 async function main() {
   console.log('=== Frontend Build ===')
 
@@ -18,16 +19,20 @@ async function main() {
     outfile: 'dist/bundle.js',
   })
 
+  const bundle_src = readFileSync('dist/bundle.js', 'utf8')
   const html = readFileSync('index.html', 'utf8')
-    .replace('<script src="dist/bundle.js"></script>',
-      `<script>${readFileSync('dist/bundle.js', 'utf8')}</script>`)
-  writeFileSync('dist/app.html', html, 'utf8')
+    .replace('<script src="dist/bundle.js"></script>', () => `<script>${bundle_src}</script>`)
+  writeFileSync('dist/index.html', html, 'utf8')
 
   const bundle = readFileSync('dist/bundle.js', 'utf8')
+  if (bundle.includes('</script')) {
+    console.error('\nFATAL: bundle contains </script> which would break HTML parsing if inlined')
+    process.exit(1)
+  }
   const checks = [
     ['SystemDashboard component', 'system-dashboard'],
     ['terminal-view component', 'terminal-view'],
-    ['ReactiveComponent class', 'class ReactiveComponent'],
+    ['ReactiveComponent (extends HTMLElement)', 'extends HTMLElement'],
     ['Shadow DOM', 'attachShadow'],
   ]
   let ok = true
@@ -36,7 +41,7 @@ async function main() {
     console.log(`${found ? 'OK' : 'MISS'} ${name}`)
     if (!found) ok = false
   }
-  console.log(ok ? '\nBuild OK, output in dist/app.html' : '\nSome components missing!')
+  console.log(ok ? '\nBuild OK, output in dist/index.html' : '\nSome components missing!')
 }
 
 main().catch(e => { console.error('Build failed:', e); process.exit(1) })

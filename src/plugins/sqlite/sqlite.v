@@ -151,10 +151,10 @@ fn rpc_db_schema(req string, mut app &core.App) string {
 }
 
 pub fn register(mut app core.App) {
-	app.register_rpc('dbOpen', fn (req string, mut app &core.App) string { return rpc_db_open(req, mut app) })
-	app.register_rpc('dbClose', fn (req string, mut app &core.App) string { return rpc_db_close(req, mut app) })
-	app.register_rpc('dbExec', fn (req string, mut app &core.App) string { return rpc_db_exec(req, mut app) })
-	app.register_rpc('dbQuery', fn (req string, mut app &core.App) string { return rpc_db_query(req, mut app) })
-	app.register_rpc('dbTables', fn (req string, mut app &core.App) string { return rpc_db_tables(req, mut app) })
-	app.register_rpc('dbSchema', fn (req string, mut app &core.App) string { return rpc_db_schema(req, mut app) })
+	app.register_rpc('sqlite.open', fn (req string, mut app &core.App) string { return rpc_db_open(req, mut app) })
+	app.register_rpc('sqlite.close', fn (req string, mut app &core.App) string { return rpc_db_close(req, mut app) })
+	app.register_rpc('sqlite.exec', fn (req string, mut app &core.App) string { return rpc_db_exec(req, mut app) })
+	app.register_rpc('sqlite.query', fn (req string, mut app &core.App) string { return rpc_db_query(req, mut app) })
+	app.register_rpc('sqlite.tables', fn (req string, mut app &core.App) string { return rpc_db_tables(req, mut app) })
+	app.register_rpc('sqlite.schema', fn (req string, mut app &core.App) string { return rpc_db_schema(req, mut app) })
 }

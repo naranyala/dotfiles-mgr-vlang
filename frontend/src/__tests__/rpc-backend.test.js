@@ -1,38 +1,24 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'bun:test'
 
-// ─── Mock window[method] bindings (simulates webview_bind) ──────
+// ─── Mock backendRPC ────────────────────────────────────────────
 const handlers = {}
-function registerHandler(method, fn) {
-	handlers[method] = fn
-	globalThis.window[method] = (...args) => JSON.stringify(fn(...args))
+function mockBackendRPC(method, ...args) {
+	const fn = handlers[method]
+	if (!fn) return JSON.stringify({ error: true, message: `No handler for ${method}` })
+	return JSON.stringify(fn(...args))
 }
-function registerHandlers(obj) {
-	Object.assign(handlers, obj)
-	for (const [method, fn] of Object.entries(obj)) {
-		globalThis.window[method] = (...args) => JSON.stringify(fn(...args))
-	}
-}
+
+function registerHandler(method, fn) { handlers[method] = fn }
+function registerHandlers(obj) { Object.assign(handlers, obj) }
 
 beforeAll(async () => {
 	globalThis.window = globalThis.window || globalThis
-	for (const [method, fn] of Object.entries(handlers)) {
-		globalThis.window[method] = (...args) => JSON.stringify(fn(...args))
-	}
-	const origRegister = registerHandlers
-	globalThis.window.__registerHandlers = (obj) => {
-		origRegister(obj)
-		for (const [method, fn] of Object.entries(obj)) {
-			globalThis.window[method] = (...args) => JSON.stringify(fn(...args))
-		}
-	}
+	globalThis.window.backendRPC = mockBackendRPC
 	await import('../core/rpc.js')
 })
 
 afterEach(() => {
-	for (const k in handlers) {
-		delete handlers[k]
-		delete globalThis.window[k]
-	}
+	for (const k in handlers) delete handlers[k]
 })
 
 async function call(method, ...args) {
@@ -507,8 +493,10 @@ describe('file tree RPC methods', () => {
 // ═══════════════════════════════════════════════════════════════
 
 describe('RPC error handling', () => {
-	it('throws for unknown method', async () => {
-		await expect(call('nonExistentMethod')).rejects.toThrow('not available')
+	it('returns error object for unknown method', async () => {
+		const r = await call('nonExistentMethod')
+		expect(r.error).toBe(true)
+		expect(typeof r.message).toBe('string')
 	})
 
 	it('returns error for handler that throws', async () => {
@@ -516,8 +504,11 @@ describe('RPC error handling', () => {
 		await expect(call('throwingMethod')).rejects.toThrow()
 	})
 
-	it('throws when method not bound to window', async () => {
-		await expect(call('anything')).rejects.toThrow('not available')
+	it('backendRPC not available throws', async () => {
+		const orig = window.backendRPC
+		delete window.backendRPC
+		await expect(call('anything')).rejects.toThrow('Backend RPC not available')
+		window.backendRPC = orig
 	})
 })
 

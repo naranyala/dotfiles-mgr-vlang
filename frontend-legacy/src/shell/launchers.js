@@ -1,25 +1,30 @@
-import * as system from '../plugins/system/index.js'
-import * as git from '../plugins/git/index.js'
-import * as files from '../plugins/files/index.js'
-import * as tools from '../plugins/tools/index.js'
+import * as systemFeature from '../features/system/index.js'
+import * as gitFeature from '../features/git/index.js'
+import * as filesFeature from '../features/files/index.js'
+import * as toolsFeature from '../features/tools/index.js'
+import * as workspaceFeature from '../features/workspace/index.js'
+import * as themeFeature from '../features/theme/index.js'
 import * as health from '../plugins/health/index.js'
 import * as processes from '../plugins/processes/index.js'
 import * as commands from '../plugins/commands/index.js'
 import * as network from '../plugins/network/index.js'
 import * as probe from '../plugins/probe/index.js'
 import * as filetools from '../plugins/filetools/index.js'
-import * as theme from '../plugins/theme/index.js'
+import * as search from '../plugins/search/index.js'
+import * as metrics from '../plugins/metrics/index.js'
+import * as fstree from '../plugins/fstree/index.js'
+import * as sqlite from '../plugins/sqlite/index.js'
 
 export const launchers = [
 	{
 		id: 'dashboard', icon: '⊞', title: 'Dashboard',
 		desc: 'System overview, workspace management & tools',
 		content: () => `
-			${git.render()}
+			${gitFeature.render()}
 			<div class="grid2">
-				${system.render()}
-				${tools.render()}
-				${files.render()}
+				${systemFeature.render()}
+				${toolsFeature.render()}
+				${filesFeature.render()}
 			</div>
 			<div class="full-width">
 				<label>Terminal Logs</label>
@@ -49,7 +54,7 @@ export const launchers = [
 	{
 		id: 'git', icon: '⑂', title: 'Git',
 		desc: 'Clone, manage & restore git repositories',
-		content: () => `${git.render()}`
+		content: () => `${gitFeature.render()}`
 	},
 	{
 		id: 'terminal', icon: '〉', title: 'Terminal',
@@ -82,9 +87,30 @@ export const launchers = [
 	{
 		id: 'theme', icon: '◐', title: 'Theme Switcher',
 		desc: 'Toggle dark/light design tokens',
-		content: () => `${theme.render()}`
+		content: () => `${themeFeature.render()}`
 	},
-]
+	{
+		id: 'search', icon: '⌕', title: 'Code Search',
+		desc: 'Search code with git grep',
+		content: () => `${search.render()}`
+	},
+	{
+		id: 'metrics', icon: '📊', title: 'Metrics',
+		desc: 'File count and total size of workspace',
+		content: () => `${metrics.render()}`
+	},
+	{
+		id: 'fstree', icon: '🌳', title: 'File Tree',
+		desc: 'Browse repository directory tree',
+		content: () => `${fstree.render()}`
+	},
+	{
+		id: 'sqlite', icon: '🗄', title: 'SQLite DB',
+		desc: 'Explore and manage SQLite databases',
+		content: () => `${sqlite.render()}`
+	},
+	]
+
 
 export function fuzzyMatch(text, query) {
 	if (!query) return true

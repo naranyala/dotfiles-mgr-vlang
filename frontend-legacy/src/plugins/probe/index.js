@@ -13,7 +13,7 @@ export const state = reactive({
 })
 
 const loadPerCore = computed(() => {
-	if (!state.data) return null
+	if (!state.data || !Array.isArray(state.data.loadAvg)) return null
 	const cores = state.data.cpuCores || 1
 	return state.data.loadAvg.map(v => (v / cores).toFixed(2))
 })
@@ -54,7 +54,8 @@ export function render() {
 			</div>
 			<div class="bd">
 				${!d ? '<div style="color:#64748b">Loading…</div>' :
-				d.error ? `<span class="err">${d.error}</span>` : `
+				d.error ? `<span class="err">${d.error}</span>` :
+				!d.loadAvg ? '<div style="color:#64748b">No data available</div>' : `
 					<label style="font-size:0.8rem;margin-bottom:12px">CPU Load (per core)</label>
 					<div class="mono" style="font-size:0.8rem">
 						${['1m', '5m', '15m'].map((label, i) => `

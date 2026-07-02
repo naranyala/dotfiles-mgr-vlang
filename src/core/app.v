@@ -4,6 +4,15 @@ import src.util
 import src.ffi
 import x.json2
 
+pub struct PluginManifest {
+	id string
+	name string
+	version string
+	description string
+	dependencies []string
+	config map[string]string
+}
+
 pub struct BindingCtx {
 pub mut:
 	app &App = unsafe { nil }
@@ -15,6 +24,7 @@ pub mut:
 	w voidptr
 	handlers map[string]fn(req string, mut app App) string
 	binding_ctxs []&BindingCtx
+	plugins map[string]PluginManifest
 }
 
 pub fn new_app() &App {
@@ -26,15 +36,26 @@ pub fn new_app() &App {
 
 	C.webview_init(w, "
 		window.rpc = window.rpc || {};
+		window.backendRPC = function(method) {
+			var fn = window[method];
+			if (!fn) throw new Error('RPC method \"' + method + '\" not available');
+			var args = [];
+			for (var i = 1; i < arguments.length; i++) args.push(arguments[i]);
+			return fn.apply(null, args);
+		};
 		const oldLog = console.log;
 		const oldWarn = console.warn;
 		const oldError = console.error;
-		console.log = (...args) => { oldLog(...args); window.rpc.log && window.rpc.log(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), 'info'); };
-		console.warn = (...args) => { oldWarn(...args); window.rpc.log && window.rpc.log(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), 'warn'); };
-		console.error = (...args) => { oldError(...args); window.rpc.log && window.rpc.log(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), 'error'); };
+		console.log = (...args) => { oldLog(...args); try { window['shell.log'](args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), 'info') } catch(e) {} };
+		console.warn = (...args) => { oldWarn(...args); try { window['shell.log'](args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), 'warn') } catch(e) {} };
+		console.error = (...args) => { oldError(...args); try { window['shell.log'](args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), 'error') } catch(e) {} };
 	".str)
 
-	mut app := &App{ w: w }
+	mut app := &App{ 
+		w: w
+		handlers: {}
+		plugins: {}
+	}
 	register_builtins(mut app)
 	return app
 }
@@ -94,7 +115,7 @@ fn c_rpc_dispatcher(seq &char, req &char, arg voidptr) {
 	mut app := ctx.app
 	req_str := unsafe { req.vstring() }
 
-	if ctx.name != 'log' && ctx.name != 'dumpBackendState' {
+	if ctx.name != 'shell.log' && ctx.name != 'shell.dumpBackendState' {
 		println('[RPC CALL] ${ctx.name} <- ${req_str}')
 	}
 
@@ -112,7 +133,7 @@ fn c_rpc_dispatcher(seq &char, req &char, arg voidptr) {
 		return
 	}
 
-	if ctx.name != 'log' && ctx.name != 'dumpBackendState' {
+	if ctx.name != 'shell.log' && ctx.name != 'shell.dumpBackendState' {
 		res_short := if res.len > 100 { res[..100] + '...' } else { res }
 		println('[RPC RES]  ${ctx.name} -> ${res_short}')
 	}
@@ -129,4 +150,11 @@ pub fn (mut app App) register_rpc(name string, handler fn (req string, mut a App
 	ctx := &BindingCtx{ app: app, name: name }
 	app.binding_ctxs << ctx
 	C.webview_bind(app.w, name.str, voidptr(c_rpc_dispatcher), ctx)
+}
+
+pub fn (mut app App) register_plugin(manifest PluginManifest, handlers map[string]fn(req string, mut a App) string) {
+	app.plugins[manifest.id] = manifest
+	for name, handler in handlers {
+		app.register_rpc(name, handler)
+	}
 }

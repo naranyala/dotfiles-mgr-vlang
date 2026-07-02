@@ -36,6 +36,10 @@ const pluginModules = {
 	probe: () => import('../plugins/probe/index.js'),
 	filetools: () => import('../plugins/filetools/index.js'),
 	theme: () => import('../plugins/theme/index.js'),
+	search: () => import('../plugins/search/index.js'),
+	metrics: () => import('../plugins/metrics/index.js'),
+	fstree: () => import('../plugins/fstree/index.js'),
+	sqlite: () => import('../plugins/sqlite/index.js'),
 }
 
 describe('plugin contract', () => {
@@ -250,6 +254,105 @@ describe('files plugin', () => {
 	it('state has expected fields', async () => {
 		const mod = await pluginModules.files()
 		expect(mod.state).toHaveProperty('dirEntries')
+	})
+})
+
+// --- Search plugin ---
+
+describe('search plugin', () => {
+	it('state has expected fields', async () => {
+		const mod = await pluginModules.search()
+		expect(mod.state).toHaveProperty('query')
+		expect(mod.state).toHaveProperty('results')
+		expect(mod.state).toHaveProperty('loading')
+	})
+
+	it('loading starts false', async () => {
+		const mod = await pluginModules.search()
+		expect(mod.state.loading).toBe(false)
+	})
+
+	it('has onMount for event delegation', async () => {
+		const mod = await pluginModules.search()
+		expect(typeof mod.onMount).toBe('function')
+	})
+})
+
+// --- Metrics plugin ---
+
+describe('metrics plugin', () => {
+	it('state has expected fields', async () => {
+		const mod = await pluginModules.metrics()
+		expect(mod.state).toHaveProperty('data')
+		expect(mod.state).toHaveProperty('loading')
+	})
+
+	it('loading starts false', async () => {
+		const mod = await pluginModules.metrics()
+		expect(mod.state.loading).toBe(false)
+	})
+
+	it('has onMount for refresh button', async () => {
+		const mod = await pluginModules.metrics()
+		expect(typeof mod.onMount).toBe('function')
+	})
+})
+
+// --- Fstree plugin ---
+
+describe('fstree plugin', () => {
+	it('state has expected fields', async () => {
+		const mod = await pluginModules.fstree()
+		expect(mod.state).toHaveProperty('repoId')
+		expect(mod.state).toHaveProperty('tree')
+		expect(mod.state).toHaveProperty('fileContent')
+		expect(mod.state).toHaveProperty('selectedFile')
+		expect(mod.state).toHaveProperty('loading')
+		expect(mod.state).toHaveProperty('error')
+	})
+
+	it('initial values are default', async () => {
+		const mod = await pluginModules.fstree()
+		expect(mod.state.repoId).toBe('')
+		expect(mod.state.tree).toBeNull()
+		expect(mod.state.fileContent).toBe('')
+		expect(mod.state.selectedFile).toBe('')
+		expect(mod.state.loading).toBe(false)
+		expect(mod.state.error).toBe('')
+	})
+
+	it('has onMount for event delegation', async () => {
+		const mod = await pluginModules.fstree()
+		expect(typeof mod.onMount).toBe('function')
+	})
+})
+
+// --- SQLite plugin ---
+
+describe('sqlite plugin', () => {
+	it('renders table grid when tables are present', async () => {
+		const mod = await pluginModules.sqlite()
+		mod.state.tables = ['users', 'posts', 'comments']
+		const result = mod.render()
+		expect(result).toContain('data-select-table="users"')
+		expect(result).toContain('data-select-table="posts"')
+		expect(result).toContain('data-select-table="comments"')
+	})
+
+	it('renders empty state when no tables', async () => {
+		const mod = await pluginModules.sqlite()
+		mod.state.tables = []
+		const result = mod.render()
+		expect(result).toContain('No tables found.')
+	})
+
+	it('highlights selected table', async () => {
+		const mod = await pluginModules.sqlite()
+		mod.state.tables = ['users', 'posts']
+		mod.state.selectedTable = 'users'
+		const result = mod.render()
+		expect(result).toContain('feature-card')
+		expect(result).toContain('data-select-table="users"')
 	})
 })
 

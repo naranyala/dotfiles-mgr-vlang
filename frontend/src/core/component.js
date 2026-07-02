@@ -1,6 +1,8 @@
-import { effect, signal } from './signals.js'
-import { render as renderTemplate, TemplateResult } from './template.js'
+import { effect, signal, computed, watch, onCleanup, batch } from './signals.js'
+import { render as renderTemplate, TemplateResult, html as templateHtml } from './template.js'
 import { morph } from './dom.js'
+
+const HOST_DEFAULTS = `:host{display:block;font-family:'Inter',system-ui,-apple-system,sans-serif;color:#f8fafc;box-sizing:border-box}:host([hidden]){display:none}`
 
 export class ReactiveComponent extends HTMLElement {
 	constructor() {
@@ -8,6 +10,7 @@ export class ReactiveComponent extends HTMLElement {
 		this.props = {}
 		this._isMounted = false
 		this._hasRendered = false
+		this._firstUpdated = false
 		this._updatePending = false
 		this._updateResolve = null
 		this._updatePromise = null
@@ -15,18 +18,25 @@ export class ReactiveComponent extends HTMLElement {
 		this._delegatedEvents = new Map()
 		this._delegationRoots = new Set()
 		this._effectCleanup = null
+		this._setupState = null
+		this._previousProps = {}
 
 		this.attachShadow({ mode: 'open' })
 
+		const sheets = []
+		const hostSheet = new CSSStyleSheet()
+		hostSheet.replaceSync(HOST_DEFAULTS)
+		sheets.push(hostSheet)
+
 		if (this.constructor.styles) {
-			try {
-				const sheet = new CSSStyleSheet()
-				sheet.replaceSync(this.constructor.styles)
-				this.shadowRoot.adoptedStyleSheets = [sheet]
-			} catch (e) {
-				console.error(`[${this.tagName}] CSS error:`, e)
-			}
+			const sheet = new CSSStyleSheet()
+			sheet.replaceSync(this.constructor.styles)
+			sheets.push(sheet)
 		}
+		const resetSheet = new CSSStyleSheet()
+		resetSheet.replaceSync(':host, *, *::before, *::after { border-radius: 0 !important; }')
+		sheets.push(resetSheet)
+		this.shadowRoot.adoptedStyleSheets = sheets
 
 		const props = this.constructor.properties || {}
 		this._propSignals = {}
@@ -36,7 +46,8 @@ export class ReactiveComponent extends HTMLElement {
 			const options = typeof config === 'object' ? config : {}
 
 			const attrName = options.attribute || name
-			const initialVal = this.hasAttribute(attrName) ? this.getAttribute(attrName) : options.value
+			const hasAttr = this.hasAttribute(attrName)
+			const initialVal = hasAttr ? this.getAttribute(attrName) : (options.value !== undefined ? options.value : (type === Boolean ? false : undefined))
 
 			const sig = signal(this._cast(initialVal, type))
 			this._propSignals[name] = sig
@@ -44,10 +55,15 @@ export class ReactiveComponent extends HTMLElement {
 			Object.defineProperty(this, name, {
 				get: () => sig.value,
 				set: (val) => {
-					sig.value = this._cast(val, type)
+					const old = sig.value
+					const casted = this._cast(val, type)
+					sig.value = casted
 					if (options.reflect) {
 						if (val == null || val === false) this.removeAttribute(attrName)
 						else this.setAttribute(attrName, val === true ? '' : val)
+					}
+					if (this._isMounted && !Object.is(old, casted)) {
+						this.onPropsChanged({ [name]: { old, new: casted } })
 					}
 				}
 			})
@@ -75,45 +91,48 @@ export class ReactiveComponent extends HTMLElement {
 				this._propSignals[name].value = this._cast(newVal, type)
 			}
 		}
+		this.onAttributeChanged(attr, oldVal, newVal)
+	}
+
+	adoptedCallback() {
+		this.onAdopted()
 	}
 
 	addController(controller) {
 		this._controllers.add(controller)
-		if (this._isMounted && controller.hostConnected) {
-			try { controller.hostConnected() }
-			catch (e) { console.error(`[${this.tagName}] controller.hostConnected error:`, e) }
-		}
+		if (this._isMounted && controller.hostConnected) controller.hostConnected()
 	}
 
 	removeController(controller) {
 		this._controllers.delete(controller)
-		if (this._isMounted && controller.hostDisconnected) {
-			try { controller.hostDisconnected() }
-			catch (e) { console.error(`[${this.tagName}] controller.hostDisconnected error:`, e) }
-		}
+		if (this._isMounted && controller.hostDisconnected) controller.hostDisconnected()
 	}
 
-	connectedCallback() {
+		connectedCallback() {
+		this._previousProps = this._collectProps()
+		this.onBeforeMount()
 		this._isMounted = true
-		try { this.onMount() }
-		catch (e) { console.error(`[${this.tagName}] onMount error:`, e) }
+		this.onMount()
 
-		for (const c of this._controllers) {
-			if (c.hostConnected) {
-				try { c.hostConnected() }
-				catch (e) { console.error(`[${this.tagName}] controller.hostConnected error:`, e) }
-			}
-		}
+		for (const c of this._controllers) if (c.hostConnected) c.hostConnected()
 
 		this._effectCleanup = effect(() => {
 			try {
 				const result = this.render()
 				this.requestUpdate(result)
-			} catch (e) {
-				console.error(`[${this.tagName}] render error:`, e)
-				this._showError(e)
+			} catch (err) {
+				this.onError(err)
 			}
 		})
+	}
+
+	_collectProps() {
+		const props = this.constructor.properties || {}
+		const result = {}
+		for (const name of Object.keys(props)) {
+			result[name] = this[name]
+		}
+		return result
 	}
 
 	requestUpdate(templateResult) {
@@ -138,6 +157,8 @@ export class ReactiveComponent extends HTMLElement {
 		}
 
 		try {
+			this.onBeforeRender()
+
 			const res = this._latestResult
 
 			if (res instanceof TemplateResult) {
@@ -152,20 +173,20 @@ export class ReactiveComponent extends HTMLElement {
 					morph(this.shadowRoot, template.content)
 				}
 			}
-		} catch (e) {
-			console.error(`[${this.tagName}] performUpdate error:`, e)
-			this._showError(e)
-		}
 
-		this._updatePending = false
-		try { this.onRendered() }
-		catch (e) { console.error(`[${this.tagName}] onRendered error:`, e) }
+			this._updatePending = false
+			this.onRendered()
 
-		for (const c of this._controllers) {
-			if (c.hostUpdated) {
-				try { c.hostUpdated() }
-				catch (e) { console.error(`[${this.tagName}] controller.hostUpdated error:`, e) }
+			if (!this._firstUpdated) {
+				this._firstUpdated = true
+				this.firstUpdated()
 			}
+			this.updated()
+
+			for (const c of this._controllers) if (c.hostUpdated) c.hostUpdated()
+		} catch (err) {
+			this._updatePending = false
+			this.onError(err)
 		}
 
 		if (this._updateResolve) {
@@ -175,44 +196,35 @@ export class ReactiveComponent extends HTMLElement {
 		}
 	}
 
-	_showError(e) {
-		if (!this.shadowRoot) return
-		this.shadowRoot.innerHTML = `
-			<div style="padding:16px;background:#1e0000;border:1px solid #f87171;border-radius:8px;font-family:monospace;font-size:0.82rem;color:#fca5a5">
-				<div style="font-weight:600;margin-bottom:6px">⚠ Component Error</div>
-				<div style="color:#f87171;word-break:break-all">${e.message || e}</div>
-			</div>`
-	}
-
 	disconnectedCallback() {
 		this._isMounted = false
 		if (this._effectCleanup) {
-			try { this._effectCleanup() }
-			catch (e) { console.error(`[${this.tagName}] effect cleanup error:`, e) }
+			this._effectCleanup()
 			this._effectCleanup = null
 		}
-		for (const c of this._controllers) {
-			if (c.hostDisconnected) {
-				try { c.hostDisconnected() }
-				catch (e) { console.error(`[${this.tagName}] controller.hostDisconnected error:`, e) }
-			}
-		}
-		try { this.onDestroy() }
-		catch (e) { console.error(`[${this.tagName}] onDestroy error:`, e) }
+		for (const c of this._controllers) if (c.hostDisconnected) c.hostDisconnected()
+		this.onDestroy()
 	}
 
 	render() {
-		try {
-			if (this.constructor.template) return this.constructor.template(this)
-		} catch (e) {
-			console.error(`[${this.tagName}] template render error:`, e)
-		}
+		if (this.constructor.template) return this.constructor.template(this)
 		return ''
 	}
 
+	// Lifecycle hooks
+	onBeforeMount() {}
 	onMount() {}
+	onBeforeRender() {}
 	onRendered() {}
 	onDestroy() {}
+	firstUpdated() {}
+	updated() {}
+	onPropsChanged(changedProps) {}
+	onAttributeChanged(attr, oldVal, newVal) {}
+	onAdopted() {}
+	onError(error) {
+		console.error(`[${this.tagName}]`, error)
+	}
 
 	query(selector) { return this.shadowRoot ? this.shadowRoot.querySelector(selector) : null }
 
@@ -241,10 +253,7 @@ export class ReactiveComponent extends HTMLElement {
 					const target = e.target
 					const listeners = this._delegatedEvents.get(type) || []
 					for (const l of listeners) {
-						if (target.matches(l.selector) || target.closest(l.selector)) {
-							try { l.listener(e) }
-							catch (err) { console.error(`[${this.tagName}] delegate ${type} ${l.selector} error:`, err) }
-						}
+						if (target.matches(l.selector) || target.closest(l.selector)) l.listener(e)
 					}
 				})
 			}, 0)
@@ -267,3 +276,5 @@ export class ReactiveComponent extends HTMLElement {
 		return cls
 	}
 }
+
+

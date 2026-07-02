@@ -88,11 +88,11 @@ fn rpc_disk_usage(req string, mut app &core.App) string {
 }
 
 pub fn register(mut app core.App) {
-	app.register_rpc('systemInfo', fn (req string, mut app &core.App) string { return rpc_system_info(req, mut app) })
-	app.register_rpc('hostname', fn (req string, mut app &core.App) string { return rpc_hostname(req, mut app) })
-	app.register_rpc('username', fn (req string, mut app &core.App) string { return rpc_username(req, mut app) })
-	app.register_rpc('uname', fn (req string, mut app &core.App) string { return rpc_uname(req, mut app) })
-	app.register_rpc('memoryInfo', fn (req string, mut app &core.App) string { return rpc_memory_info(req, mut app) })
-	app.register_rpc('uptime', fn (req string, mut app &core.App) string { return rpc_uptime(req, mut app) })
-	app.register_rpc('diskUsage', fn (req string, mut app &core.App) string { return rpc_disk_usage(req, mut app) })
+	app.register_rpc('system.getSystemInfo', fn (req string, mut app &core.App) string { return rpc_system_info(req, mut app) })
+	app.register_rpc('shell.hostname', fn (req string, mut app &core.App) string { return rpc_hostname(req, mut app) })
+	app.register_rpc('shell.username', fn (req string, mut app &core.App) string { return rpc_username(req, mut app) })
+	app.register_rpc('shell.uname', fn (req string, mut app &core.App) string { return rpc_uname(req, mut app) })
+	app.register_rpc('shell.memoryInfo', fn (req string, mut app &core.App) string { return rpc_memory_info(req, mut app) })
+	app.register_rpc('shell.uptime', fn (req string, mut app &core.App) string { return rpc_uptime(req, mut app) })
+	app.register_rpc('shell.diskUsage', fn (req string, mut app &core.App) string { return rpc_disk_usage(req, mut app) })
 }

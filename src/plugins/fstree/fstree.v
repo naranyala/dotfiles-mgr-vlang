@@ -62,6 +62,6 @@ fn rpc_get_file_content(req string, mut app &core.App) string {
 }
 
 pub fn register(mut app core.App) {
-	app.register_rpc('get_tree', fn (req string, mut app &core.App) string { return rpc_get_tree(req, mut app) })
-	app.register_rpc('get_file_content', fn (req string, mut app &core.App) string { return rpc_get_file_content(req, mut app) })
+	app.register_rpc('shell.get_tree', fn (req string, mut app &core.App) string { return rpc_get_tree(req, mut app) })
+	app.register_rpc('shell.get_file_content', fn (req string, mut app &core.App) string { return rpc_get_file_content(req, mut app) })
 }

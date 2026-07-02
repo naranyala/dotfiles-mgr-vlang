@@ -1,9 +1,10 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync } from 'fs'
 import * as esbuild from 'esbuild'
 
+const standalone = process.env.STANDALONE_GRID || ''
 
 async function main() {
-  console.log('=== Frontend Build ===')
+  console.log('=== Frontend Build ===' + (standalone ? ` [standalone: ${standalone}]` : ''))
 
   if (existsSync('dist')) rmSync('dist', { recursive: true })
   mkdirSync('dist')
@@ -17,18 +18,21 @@ async function main() {
     sourcemap: false,
     target: ['es2020'],
     outfile: 'dist/bundle.js',
+    define: { __STANDALONE_GRID__: JSON.stringify(standalone) },
   })
-
-  const bundle_src = readFileSync('dist/bundle.js', 'utf8')
-  const html = readFileSync('index.html', 'utf8')
-    .replace('<script src="dist/bundle.js"></script>', () => `<script>${bundle_src}</script>`)
-  writeFileSync('dist/index.html', html, 'utf8')
 
   const bundle = readFileSync('dist/bundle.js', 'utf8')
   if (bundle.includes('</script')) {
     console.error('\nFATAL: bundle contains </script> which would break HTML parsing if inlined')
     process.exit(1)
   }
+  const html = readFileSync('index.html', 'utf8')
+    .replace('<script src="dist/bundle.js"></script>', () => `<script>${bundle}</script>`)
+    .replace('<system-dashboard title="dotfiles-mgr"></system-dashboard>',
+      standalone
+        ? `<system-dashboard title="dotfiles-mgr" standalone="${standalone}"></system-dashboard>`
+        : '<system-dashboard title="dotfiles-mgr"></system-dashboard>')
+  writeFileSync('dist/index.html', html, 'utf8')
   const checks = [
     ['SystemDashboard component', 'system-dashboard'],
     ['terminal-view component', 'terminal-view'],
